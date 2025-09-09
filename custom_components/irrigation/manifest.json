@@ -1,0 +1,13 @@
+{
+  "domain": "irrigation",
+  "name": "Irrigation Controller",
+  "version": "1.0.3",
+  "documentation": "https://github.com/jbuck2005/irrigation-ha",
+  "requirements": [],
+  "dependencies": [],
+  "codeowners": [
+    "@jbuck2005"
+  ],
+  "iot_class": "local_push",
+  "config_flow": true
+}
