@@ -1,5 +1,3 @@
-# Irrigation Controller for Home Assistant
+# Irrigation Controller for Home Assistant (v1.0.3)
 
-Custom integration (v1.0.3) for irrigationd with countdown timers and Lovelace dashboard examples.
-
-See full documentation in repository.
+Custom integration with UI config (host/port/zones) and blueprint for irrigation cycles.

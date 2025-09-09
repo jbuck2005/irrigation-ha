@@ -15,6 +15,8 @@ class IrrigationConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             vol.Required(CONF_NAME, default="Irrigation Controller"): str,
             vol.Optional("zones", default=14): int,
             vol.Optional("default_duration", default=300): int,
+            vol.Required("host", default="127.0.0.1"): str,
+            vol.Required("port", default=4242): int,
         })
         return self.async_show_form(step_id="user", data_schema=schema)
 
@@ -27,7 +29,9 @@ class IrrigationOptionsFlowHandler(config_entries.OptionsFlow):
             return self.async_create_entry(title="", data=user_input)
         schema = vol.Schema({
             vol.Required("zones", default=self.config_entry.data.get("zones", 14)): int,
-            vol.Required("default_duration", default=self.config_entry.data.get("default_duration", 60)): int,
+            vol.Required("default_duration", default=self.config_entry.data.get("default_duration", 300)): int,
+            vol.Required("host", default=self.config_entry.data.get("host", "127.0.0.1")): str,
+            vol.Required("port", default=self.config_entry.data.get("port", 4242)): int,
         })
         return self.async_show_form(step_id="init", data_schema=schema)
 
