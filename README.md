@@ -9,10 +9,6 @@
 ![GitHub last commit](https://img.shields.io/github/last-commit/jbuck2005/irrigation-ha)
 ![GitHub Repo stars](https://img.shields.io/github/stars/jbuck2005/irrigation-ha?style=social)
 
-[![Validate Integration](https://github.com/jbuck2005/irrigation-ha/actions/workflows/validate.yml/badge.svg)](https://github.com/jbuck2005/irrigation-ha/actions/workflows/validate.yml)
-[![hacs_badge](https://img.shields.io/badge/HACS-Custom-blue.svg)](https://hacs.xyz/docs/faq/custom_repositories)
-
-
 # Irrigation Controller for Home Assistant (v1.0.5)
 
 Custom integration to control irrigation zones through `irrigationd` + `irrigationctl`.  
