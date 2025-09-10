@@ -12,3 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Switch entities for each irrigation zone
 - Automation blueprint for sequential irrigation cycles
 - GitHub Actions workflows for validation and release
+
+
+## [1.0.5] - 2025-09-09
+### Fixed
+- Corrected manifest.json key order and JSON boolean casing to satisfy hassfest validation
