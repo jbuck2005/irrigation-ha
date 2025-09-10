@@ -1,19 +1,10 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
-## [1.0.4] - 2025-09-09
+## 1.0.6 - 2025-09-10
 ### Added
-- Initial public HACS release of Irrigation Controller
-- Config Flow with host/port, zones, default duration
-- Switch entities for each irrigation zone
-- Automation blueprint for sequential irrigation cycles
-- GitHub Actions workflows for validation and release
+- Support for `ZONE=n TIME=0` in `irrigationd` to stop zones immediately.
+- Home Assistant integration updated to send `TIME=0` when turning off zones.
 
-
-## [1.0.5] - 2025-09-09
 ### Fixed
-- Corrected manifest.json key order and JSON boolean casing to satisfy hassfest validation
+- Zones can now be turned off early from the HA UI without waiting for timers.
+
