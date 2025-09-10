@@ -1,4 +1,4 @@
-# Irrigation Controller for Home Assistant (v1.0.3)
+# Irrigation Controller for Home Assistant (v1.0.4)
 
 Custom integration to control irrigation zones through `irrigationd` + `irrigationctl`.  
 Provides:
