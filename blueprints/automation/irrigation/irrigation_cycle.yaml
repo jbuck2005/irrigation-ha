@@ -1,4 +1,60 @@
 blueprint:
   name: Irrigation Cycle
-  description: Run irrigation zones sequentially
+  description: >
+    Run irrigation zones sequentially with configurable durations per zone.
+    Requires the Irrigation integration (irrigation-ha).
   domain: automation
+  input:
+    start_time:
+      name: Start Time
+      description: When to run the irrigation cycle.
+      selector:
+        time: {}
+    zones:
+      name: Zones
+      description: List of irrigation zone switches to run in sequence.
+      selector:
+        target:
+          entity:
+            domain: switch
+    durations:
+      name: Zone Durations (seconds)
+      description: >
+        A list of durations (in seconds) for each zone. The number of entries must
+        match the number of zones. Example: [300, 600, 300].
+      default: []
+      selector:
+        text: {}
+
+trigger:
+  - platform: time
+    at: !input start_time
+
+action:
+  - variables:
+      zone_entities: !input zones
+      durations: !input durations
+  - repeat:
+      count: "{{ zone_entities.entity_id | count }}"
+      sequence:
+        - variables:
+            current_zone: "{{ zone_entities.entity_id[repeat.index-1] }}"
+            current_duration: >
+              {% set d = durations.split(',') if durations else [] %}
+              {% if d|length >= repeat.index %}
+              {{ d[repeat.index-1] | int }}
+              {% else %}
+              300
+              {% endif %}
+        - service: switch.turn_on
+          target:
+            entity_id: "{{ current_zone }}"
+          data: {}
+        - delay:
+            seconds: "{{ current_duration }}"
+        - service: switch.turn_off
+          target:
+            entity_id: "{{ current_zone }}"
+          data: {}
+
+mode: single
