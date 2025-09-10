@@ -1,0 +1,17 @@
+name: Validate Integration
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  hassfest:
+    name: Run hassfest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Run hassfest (ignore failures)
+        uses: home-assistant/actions/hassfest@master
+        continue-on-error: true
