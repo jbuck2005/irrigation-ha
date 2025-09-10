@@ -2,9 +2,7 @@
   "domain": "irrigation",
   "name": "Irrigation Controller",
   "version": "1.0.5",
-  "codeowners": [
-    "@jbuck2005"
-  ],
+  "codeowners": ["@jbuck2005"],
   "config_flow": true,
   "dependencies": [],
   "documentation": "https://github.com/jbuck2005/irrigation-ha",
