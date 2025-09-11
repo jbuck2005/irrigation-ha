@@ -2,11 +2,12 @@
 
 import logging
 import socket
+import asyncio
 
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.core import HomeAssistant
 
-from .const import DEFAULT_PORT, DEFAULT_ZONES, DEFAULT_DURATION, CONF_TOKEN
+from .const import DEFAULT_PORT, DEFAULT_ZONES, DEFAULT_DURATION, CONF_TOKEN, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -48,8 +49,11 @@ class IrrigationZoneSwitch(SwitchEntity):
 
     @property
     def extra_state_attributes(self):
-        """Return extra attributes including remaining time."""
-        return {"remaining": self._remaining}
+        """Return extra attributes including remaining time and configured duration."""
+        return {
+            "remaining": self._remaining,
+            "configured_duration": self._duration,
+        }
 
     def _build_command(self, zone: int, seconds: int) -> str:
         """Build a single-line command string to send to irrigationd."""
@@ -81,6 +85,7 @@ class IrrigationZoneSwitch(SwitchEntity):
         if response.startswith("OK"):
             self._is_on = True
             self._remaining = duration
+            self._duration = duration
             self.async_write_ha_state()
 
             # Countdown updater
@@ -115,6 +120,10 @@ class IrrigationZoneSwitch(SwitchEntity):
         else:
             _LOGGER.warning("Failed to turn off zone %s: %s", self._zone, response)
 
+    async def stop(self):
+        """Helper to stop irrigation immediately (alias for turn_off)."""
+        await self.async_turn_off()
+
 
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up irrigation switches from a config entry."""
@@ -124,14 +133,6 @@ async def async_setup_entry(hass, entry, async_add_entities):
     duration = entry.data.get("default_duration", DEFAULT_DURATION)
     token = entry.data.get(CONF_TOKEN)
 
-    entities = []
-    for zone in range(1, zones + 1):
-        entities.append(IrrigationZoneSwitch(hass, host, port, zone, duration, token))
-
-    async_add_entities(entities)
-
-async def async_setup_entry(hass, entry, async_add_entities):
-    ...
     entities = []
     for zone in range(1, zones + 1):
         entities.append(IrrigationZoneSwitch(hass, host, port, zone, duration, token))
