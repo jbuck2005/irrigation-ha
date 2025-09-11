@@ -29,7 +29,7 @@ class IrrigationConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 "port": int(user_input[CONF_PORT]),
                 "zones": int(user_input.get("zones", DEFAULT_ZONES)),
                 "default_duration": int(user_input.get("default_duration", DEFAULT_DURATION)),
-                "token": user_input.get(CONF_TOKEN),
+                "token": user_input.get(CONF_TOKEN, "changeme-very-secret-token"),
             }
             return self.async_create_entry(title=entry_data["name"], data=entry_data)
 
@@ -39,9 +39,9 @@ class IrrigationConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Optional(CONF_NAME, default="Irrigation Controller"): str,
                 vol.Required(CONF_HOST): str,
                 vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
-                vol.Optional("zones", default=DEFAULT_ZONES): int,
-                vol.Optional("default_duration", default=DEFAULT_DURATION): int,
-                vol.Optional(CONF_TOKEN): str,
+                vol.Required("zones", default=DEFAULT_ZONES): int,
+                vol.Required("default_duration", default=DEFAULT_DURATION): int,
+                vol.Optional(CONF_TOKEN, default="changeme-very-secret-token"): str,
             }
         )
         return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
@@ -72,7 +72,7 @@ class IrrigationOptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Required(
                     "default_duration", default=data.get("default_duration", DEFAULT_DURATION)
                 ): int,
-                vol.Optional(CONF_TOKEN, default=data.get("token")): str,
+                vol.Optional(CONF_TOKEN, default=data.get("token", "changeme-very-secret-token")): str,
             }
         )
         return self.async_show_form(step_id="init", data_schema=schema)
