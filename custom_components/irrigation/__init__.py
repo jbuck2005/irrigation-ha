@@ -49,3 +49,19 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id, None)
     return unload_ok
+
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    ...
+    # Forward setup to switch platform
+    await hass.config_entries.async_forward_entry_setups(entry, ["switch"])
+
+    async def handle_run_zone(call):
+        zone = call.data.get("zone")
+        duration = call.data.get("duration", entry.data.get("default_duration"))
+        for entity in hass.data[DOMAIN][entry.entry_id]["entities"]:
+            if entity._zone == zone:
+                await entity.async_turn_on(duration=duration)
+
+    hass.services.async_register(DOMAIN, "run_zone", handle_run_zone)
+
+    return True

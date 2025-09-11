@@ -1,1 +1,10 @@
-# Define extra services here if needed.
+run_zone:
+  name: Run Zone
+  description: Start a specific irrigation zone for a set duration.
+  fields:
+    zone:
+      description: Zone number to run
+      example: 1
+    duration:
+      description: Duration in seconds
+      example: 300

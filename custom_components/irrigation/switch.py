@@ -46,6 +46,11 @@ class IrrigationZoneSwitch(SwitchEntity):
         """Return true if switch is on."""
         return self._is_on
 
+    @property
+    def extra_state_attributes(self):
+        """Return extra attributes including remaining time."""
+        return {"remaining": self._remaining}
+
     def _build_command(self, zone: int, seconds: int) -> str:
         """Build a single-line command string to send to irrigationd."""
         if self._token:
@@ -76,6 +81,26 @@ class IrrigationZoneSwitch(SwitchEntity):
         if response.startswith("OK"):
             self._is_on = True
             self._remaining = duration
+            self.async_write_ha_state()
+
+            # Countdown updater
+            async def _tick_remaining():
+                while self._remaining > 0 and self._is_on:
+                    await asyncio.sleep(1)
+                    self._remaining -= 1
+                    self.async_write_ha_state()
+
+            self.hass.async_create_task(_tick_remaining())
+
+            # Schedule auto-off after duration
+            async def _auto_off(_now):
+                self._is_on = False
+                self._remaining = 0
+                self.async_write_ha_state()
+
+            self.hass.loop.call_later(
+                duration, lambda: self.hass.async_create_task(_auto_off(None))
+            )
         else:
             _LOGGER.warning("Failed to turn on zone %s: %s", self._zone, response)
 
@@ -86,6 +111,7 @@ class IrrigationZoneSwitch(SwitchEntity):
         if response.startswith("OK"):
             self._is_on = False
             self._remaining = 0
+            self.async_write_ha_state()
         else:
             _LOGGER.warning("Failed to turn off zone %s: %s", self._zone, response)
 
@@ -103,3 +129,14 @@ async def async_setup_entry(hass, entry, async_add_entities):
         entities.append(IrrigationZoneSwitch(hass, host, port, zone, duration, token))
 
     async_add_entities(entities)
+
+async def async_setup_entry(hass, entry, async_add_entities):
+    ...
+    entities = []
+    for zone in range(1, zones + 1):
+        entities.append(IrrigationZoneSwitch(hass, host, port, zone, duration, token))
+
+    async_add_entities(entities)
+
+    # Keep reference for service calls
+    hass.data[DOMAIN][entry.entry_id]["entities"] = entities
