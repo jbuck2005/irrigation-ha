@@ -1,12 +1,14 @@
 {
   "domain": "irrigation",
   "name": "Irrigation Controller",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "codeowners": ["@jbuck2005"],
   "config_flow": true,
   "dependencies": [],
+  "description": "Control irrigation zones via irrigationd. Now supports optional authentication token for added security.",
   "documentation": "https://github.com/jbuck2005/irrigation-ha",
   "iot_class": "local_push",
+  "integration_type": "hub",  
   "requirements": [],
   "platforms": ["switch"]
 }
