@@ -5,7 +5,7 @@ Irrigation integration bootstrap.
 - Declares CONFIG_SCHEMA as config_entry_only so hassfest knows this integration
   is configured via the UI only.
 - Sets up the integration by storing config entry data in hass.data and
-  forwarding platform setup to the `switch` platform.
+  forwarding platform setup to the `light` platform.
 """
 
 from homeassistant.config_entries import ConfigEntry
@@ -35,15 +35,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "entities": [],
     }
 
-    # Forward setup to the switch platform (creates switch entities)
-    await hass.config_entries.async_forward_entry_setups(entry, ["switch"])
+    # Forward setup to the light platform (creates light entities)
+    await hass.config_entries.async_forward_entry_setups(entry, ["light"])
 
     async def handle_run_zone(call):
         zone = call.data.get("zone")
         duration = call.data.get("duration", entry.data.get("default_duration"))
         for entity in hass.data[DOMAIN][entry.entry_id]["entities"]:
             if entity._zone == zone:
-                await entity.async_turn_on(duration=duration)
+                await entity.async_turn_on_with_duration(duration=duration)
 
     async def handle_stop_zone(call):
         zone = call.data.get("zone")
@@ -59,7 +59,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry and its platforms."""
-    unload_ok = await hass.config_entries.async_unload_platforms(entry, ["switch"])
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, ["light"])
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id, None)
     return unload_ok
