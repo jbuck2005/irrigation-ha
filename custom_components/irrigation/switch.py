@@ -16,12 +16,12 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 BUFFER_SIZE = 1024
 
-async def async_setup_entry(hass: Home Assistant, entry, async_add_entities):
+async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities):
     """Set up irrigation switches from a config entry."""
-    host = entry.data.get("host", "127.0.0.1")
-    port = entry.data.get("port", DEFAULT_PORT)
-    zones = entry.data.get("zones", DEFAULT_ZONES)
-    duration = entry.data.get("default_duration", DEFAULT_DURATION)
+    host = entry.data.get("host")
+    port = entry.data.get("port")
+    zones = entry.data.get("zones")
+    duration = entry.data.get("default_duration")
     token = entry.data.get(CONF_TOKEN)
 
     switches = [
@@ -30,19 +30,19 @@ async def async_setup_entry(hass: Home Assistant, entry, async_add_entities):
     ]
     async_add_entities(switches)
 
-    # Service handlers
+    # Register service handlers
     async def handle_run_zone(call):
-        zone = call.data.get("zone")
+        zone_to_run = call.data.get("zone")
         run_duration = call.data.get("duration", duration)
         for switch in switches:
-            if switch.zone == zone:
+            if switch.zone == zone_to_run:
                 await switch.async_turn_on(duration=run_duration)
                 break
 
     async def handle_stop_zone(call):
-        zone = call.data.get("zone")
+        zone_to_stop = call.data.get("zone")
         for switch in switches:
-            if switch.zone == zone:
+            if switch.zone == zone_to_stop:
                 await switch.async_turn_off()
                 break
 
@@ -71,7 +71,7 @@ class IrrigationZoneSwitch(SwitchEntity):
 
     @property
     def is_on(self):
-        """Return true if switch is on."""
+        """Return true if the switch is on."""
         return self._is_on
 
     @property
@@ -80,14 +80,13 @@ class IrrigationZoneSwitch(SwitchEntity):
         return {"remaining_seconds": self._remaining}
 
     async def _timer(self, duration):
-        """Timer coroutine."""
+        """Timer coroutine that updates the state."""
         self._remaining = duration
         while self._remaining > 0:
             self.async_write_ha_state()
             await asyncio.sleep(1)
             self._remaining -= 1
         
-        # When timer finishes, turn the switch off state
         self._is_on = False
         self.async_write_ha_state()
 

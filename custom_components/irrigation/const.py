@@ -1,7 +1,5 @@
 """Constants for the Irrigation integration."""
 
-from homeassistant.const import CONF_HOST, CONF_PORT, CONF_NAME, CONF_TOKEN
-
 DOMAIN = "irrigation"
 
 # Configuration keys
