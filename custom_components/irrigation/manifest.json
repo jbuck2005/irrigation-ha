@@ -1,14 +1,13 @@
 {
   "domain": "irrigation",
   "name": "Irrigation Controller",
-  "version": "1.0.9",
+  "version": "1.1.0",
   "codeowners": ["@jbuck2005"],
   "config_flow": true,
   "dependencies": [],
-  "description": "Control irrigation zones via irrigationd.",
   "documentation": "https://github.com/jbuck2005/irrigation-ha",
   "iot_class": "local_push",
   "integration_type": "hub",
   "requirements": [],
-  "platforms": ["switch", "sensor"]
+  "platforms": ["switch"]
 }
