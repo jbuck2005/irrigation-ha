@@ -23,30 +23,27 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up the irrigation integration from a config entry."""
     hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN][entry.entry_id] = {
-        "config": entry.data,
-        "entities": {}, # Use a dict to store entities by zone
-    }
+    # This dictionary will hold the switch entities so sensors can find them
+    hass.data[DOMAIN][entry.entry_id] = {"switches": {}}
 
     # Forward setup to switch and sensor platforms
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
+    # Handler for the run_zone service
     async def handle_run_zone(call):
         zone = call.data.get("zone")
         duration = call.data.get("duration", entry.data.get("default_duration"))
         
-        # Find the switch entity for the specified zone
-        for entity in hass.data[DOMAIN][entry.entry_id]["entities"].get("switch", []):
-            if entity.zone == zone:
-                await entity.async_turn_on(duration=duration)
-                break
+        switches = hass.data[DOMAIN][entry.entry_id]["switches"]
+        if zone in switches:
+            await switches[zone].async_turn_on(duration=duration)
 
+    # Handler for the stop_zone service
     async def handle_stop_zone(call):
         zone = call.data.get("zone")
-        for entity in hass.data[DOMAIN][entry.entry_id]["entities"].get("switch", []):
-            if entity.zone == zone:
-                await entity.async_turn_off()
-                break
+        switches = hass.data[DOMAIN][entry.entry_id]["switches"]
+        if zone in switches:
+            await switches[zone].async_turn_off()
 
     hass.services.async_register(DOMAIN, "run_zone", handle_run_zone)
     hass.services.async_register(DOMAIN, "stop_zone", handle_stop_zone)

@@ -3,7 +3,7 @@ import logging
 import socket
 import asyncio
 from homeassistant.components.switch import SwitchEntity
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from .const import DEFAULT_PORT, DEFAULT_ZONES, DEFAULT_DURATION, CONF_TOKEN, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
@@ -19,18 +19,20 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
     switches = []
     for zone in range(1, zones + 1):
-        switches.append(IrrigationZoneSwitch(hass, host, port, zone, duration, token))
+        switch = IrrigationZoneSwitch(hass, entry.entry_id, host, port, zone, duration, token)
+        switches.append(switch)
+        # Store a reference to the switch by its zone number for the sensor to find
+        hass.data[DOMAIN][entry.entry_id]["switches"][zone] = switch
     
     async_add_entities(switches)
 
-    # Store references for service calls and sensors
-    hass.data[DOMAIN][entry.entry_id]["entities"]["switch"] = switches
 
 class IrrigationZoneSwitch(SwitchEntity):
     """Representation of an irrigation zone as a switch entity."""
 
-    def __init__(self, hass, host, port, zone, duration, token):
+    def __init__(self, hass, entry_id, host, port, zone, duration, token):
         self.hass = hass
+        self._entry_id = entry_id
         self._host = host
         self._port = port
         self.zone = zone
@@ -44,6 +46,11 @@ class IrrigationZoneSwitch(SwitchEntity):
     @property
     def name(self):
         return f"Irrigation Zone {self.zone}"
+        
+    @property
+    def unique_id(self):
+        """Return a unique ID."""
+        return f"irrigation_{self._entry_id}_zone_{self.zone}_switch"
 
     @property
     def is_on(self):
@@ -51,7 +58,10 @@ class IrrigationZoneSwitch(SwitchEntity):
 
     @property
     def extra_state_attributes(self):
-        return {"configured_duration": self._duration}
+        return {
+            "configured_duration": self._duration,
+            "remaining_seconds": self.remaining
+        }
 
     def _build_command(self, zone, seconds):
         if self._token:
@@ -67,18 +77,17 @@ class IrrigationZoneSwitch(SwitchEntity):
             _LOGGER.error("Error sending command to irrigationd: %s", e)
             return f"ERR {e}"
 
-    async def _countdown(self):
-        """Task to update the remaining time."""
+    async def _timer(self, duration):
+        """The timer coroutine."""
+        self.remaining = duration
         while self.remaining > 0:
+            self.async_write_ha_state()
             await asyncio.sleep(1)
             self.remaining -= 1
-            self.async_write_ha_state() # Update switch state
-            # Also update the linked sensor
-            for sensor in self.hass.data[DOMAIN][self.entity_id.split('.')[1].split('_')[-2]]["entities"].get("sensor", []):
-                if sensor.zone == self.zone:
-                    sensor.async_write_ha_state()
-                    break
-
+        
+        # Timer finished, turn off the switch
+        self._is_on = False
+        self.async_write_ha_state()
 
     async def async_turn_on(self, **kwargs):
         duration = kwargs.get("duration", self._default_duration)
@@ -87,28 +96,29 @@ class IrrigationZoneSwitch(SwitchEntity):
 
         if response.startswith("OK"):
             self._is_on = True
-            self.remaining = duration
             self._duration = duration
             
-            # Start the countdown task
+            # Cancel any existing timer before starting a new one
             if self._timer_task:
                 self._timer_task.cancel()
-            self._timer_task = self.hass.async_create_task(self._countdown())
-
+            
+            self._timer_task = self.hass.async_create_task(self._timer(duration))
             self.async_write_ha_state()
         else:
             _LOGGER.warning("Failed to turn on zone %s: %s", self.zone, response)
 
     async def async_turn_off(self, **kwargs):
+        # Cancel the timer if it's running
+        if self._timer_task:
+            self._timer_task.cancel()
+            self._timer_task = None
+            
         command = self._build_command(self.zone, 0)
         response = await self.hass.async_add_executor_job(self._send_command, command)
 
         if response.startswith("OK"):
             self._is_on = False
             self.remaining = 0
-            if self._timer_task:
-                self._timer_task.cancel()
-                self._timer_task = None
             self.async_write_ha_state()
         else:
             _LOGGER.warning("Failed to turn off zone %s: %s", self.zone, response)
