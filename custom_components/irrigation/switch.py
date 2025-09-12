@@ -3,7 +3,7 @@ import logging
 import socket
 import asyncio
 from homeassistant.components.switch import SwitchEntity
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from .const import DEFAULT_PORT, DEFAULT_ZONES, DEFAULT_DURATION, CONF_TOKEN, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
@@ -21,7 +21,6 @@ async def async_setup_entry(hass, entry, async_add_entities):
     for zone in range(1, zones + 1):
         switch = IrrigationZoneSwitch(hass, entry.entry_id, host, port, zone, duration, token)
         switches.append(switch)
-        # Store a reference to the switch by its zone number for the sensor to find
         hass.data[DOMAIN][entry.entry_id]["switches"][zone] = switch
     
     async_add_entities(switches)
@@ -49,7 +48,6 @@ class IrrigationZoneSwitch(SwitchEntity):
         
     @property
     def unique_id(self):
-        """Return a unique ID."""
         return f"irrigation_{self._entry_id}_zone_{self.zone}_switch"
 
     @property
@@ -78,14 +76,12 @@ class IrrigationZoneSwitch(SwitchEntity):
             return f"ERR {e}"
 
     async def _timer(self, duration):
-        """The timer coroutine."""
         self.remaining = duration
         while self.remaining > 0:
             self.async_write_ha_state()
             await asyncio.sleep(1)
             self.remaining -= 1
         
-        # Timer finished, turn off the switch
         self._is_on = False
         self.async_write_ha_state()
 
@@ -98,7 +94,6 @@ class IrrigationZoneSwitch(SwitchEntity):
             self._is_on = True
             self._duration = duration
             
-            # Cancel any existing timer before starting a new one
             if self._timer_task:
                 self._timer_task.cancel()
             
@@ -108,7 +103,6 @@ class IrrigationZoneSwitch(SwitchEntity):
             _LOGGER.warning("Failed to turn on zone %s: %s", self.zone, response)
 
     async def async_turn_off(self, **kwargs):
-        # Cancel the timer if it's running
         if self._timer_task:
             self._timer_task.cancel()
             self._timer_task = None
