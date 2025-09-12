@@ -2,7 +2,7 @@
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.const import CONF_HOST, CONF_PORT, CONF_NAME
-import homeassistant.helpers.config_validation as cv
+from homeassistant.core import callback
 
 from .const import (
     DOMAIN,
@@ -18,15 +18,20 @@ class IrrigationConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry):
+        """Get the options flow for this handler."""
+        return IrrigationOptionsFlowHandler(config_entry)
+
     async def async_step_user(self, user_input=None):
-        """Handle the initial step where the user provides connection details."""
+        """Handle the initial step."""
         errors = {}
         if user_input is not None:
-            # Save user configuration
             return self.async_create_entry(title=user_input[CONF_NAME], data=user_input)
 
-        # Form schema for user input. No defaults are provided here.
-        # This makes all fields required for user input on the form.
+        # Schema for the user setup form.
+        # Using suggested_value to guide the user without providing a default.
         schema = vol.Schema(
             {
                 vol.Required(CONF_NAME, description={"suggested_value": "Irrigation Controller"}): str,
@@ -38,10 +43,6 @@ class IrrigationConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             }
         )
         return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
-
-    async def async_step_import(self, user_input):
-        """Import a config entry from configuration.yaml."""
-        return await self.async_step_user(user_input)
 
 
 class IrrigationOptionsFlowHandler(config_entries.OptionsFlow):
@@ -56,17 +57,15 @@ class IrrigationOptionsFlowHandler(config_entries.OptionsFlow):
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
-        # The options flow still uses defaults, as this is for editing existing settings.
         data = self.config_entry.data
+        # The options flow uses defaults since it's for editing existing settings.
         schema = vol.Schema(
             {
-                vol.Required(CONF_HOST, default=data.get("host", "127.0.0.1")): str,
-                vol.Required(CONF_PORT, default=data.get("port", DEFAULT_PORT)): int,
-                vol.Required("zones", default=data.get("zones", DEFAULT_ZONES)): int,
-                vol.Required(
-                    "default_duration", default=data.get("default_duration", DEFAULT_DURATION)
-                ): int,
-                vol.Required(CONF_TOKEN, default=data.get("token", "changeme-very-secret-token")): str,
+                vol.Required(CONF_HOST, default=data.get("host")): str,
+                vol.Required(CONF_PORT, default=data.get("port")): int,
+                vol.Required("zones", default=data.get("zones")): int,
+                vol.Required("default_duration", default=data.get("default_duration")): int,
+                vol.Required(CONF_TOKEN, default=data.get("token")): str,
             }
         )
         return self.async_show_form(step_id="init", data_schema=schema)
