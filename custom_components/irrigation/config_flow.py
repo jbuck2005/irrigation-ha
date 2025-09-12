@@ -22,26 +22,19 @@ class IrrigationConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Handle the initial step where the user provides connection details."""
         errors = {}
         if user_input is not None:
-            # Save user configuration including optional token
-            entry_data = {
-                "name": user_input.get(CONF_NAME, "Irrigation Controller"),
-                "host": user_input[CONF_HOST],
-                "port": int(user_input[CONF_PORT]),
-                "zones": int(user_input.get("zones", DEFAULT_ZONES)),
-                "default_duration": int(user_input.get("default_duration", DEFAULT_DURATION)),
-                "token": user_input.get(CONF_TOKEN, "changeme-very-secret-token"),
-            }
-            return self.async_create_entry(title=entry_data["name"], data=entry_data)
+            # Save user configuration
+            return self.async_create_entry(title=user_input[CONF_NAME], data=user_input)
 
-        # Form schema for user input
+        # Form schema for user input. No defaults are provided here.
+        # This makes all fields required for user input on the form.
         schema = vol.Schema(
             {
-                vol.Optional(CONF_NAME, default="Irrigation Controller"): str,
+                vol.Required(CONF_NAME, description={"suggested_value": "Irrigation Controller"}): str,
                 vol.Required(CONF_HOST): str,
-                vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
-                vol.Required("zones", default=DEFAULT_ZONES): int,
-                vol.Required("default_duration", default=DEFAULT_DURATION): int,
-                vol.Required(CONF_TOKEN, default="changeme-very-secret-token"): str,
+                vol.Required(CONF_PORT, description={"suggested_value": DEFAULT_PORT}): int,
+                vol.Required("zones", description={"suggested_value": DEFAULT_ZONES}): int,
+                vol.Required("default_duration", description={"suggested_value": DEFAULT_DURATION}): int,
+                vol.Required(CONF_TOKEN, description={"suggested_value": "changeme-very-secret-token"}): str,
             }
         )
         return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
@@ -55,7 +48,7 @@ class IrrigationOptionsFlowHandler(config_entries.OptionsFlow):
     """Handle an options flow for Irrigation."""
 
     def __init__(self, config_entry):
-        """Initialize options flow with a reference to the config entry."""
+        """Initialize options flow."""
         self.config_entry = config_entry
 
     async def async_step_init(self, user_input=None):
@@ -63,6 +56,7 @@ class IrrigationOptionsFlowHandler(config_entries.OptionsFlow):
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
+        # The options flow still uses defaults, as this is for editing existing settings.
         data = self.config_entry.data
         schema = vol.Schema(
             {
