@@ -39,14 +39,18 @@ class TlsServer:
     patched to return the client end.
     """
 
-    def __init__(self, token, reply=b"OK\n", plain_reply=None):
+    def __init__(self, token, reply=b"OK\n", plain_reply=None, cert=None):
         self.client, self.server = socket.socketpair()
         self.received = b""
         self.version = None
-        key = psk_key(token)
         self.ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         self.ctx.minimum_version = ssl.TLSVersion.TLSv1_3
-        self.ctx.set_psk_server_callback(lambda identity: key if identity == "irrigationd" else b"")
+        if cert is not None:
+            # An impostor: no key, just a certificate of its own
+            self.ctx.load_cert_chain(*cert)
+        else:
+            key = psk_key(token)
+            self.ctx.set_psk_server_callback(lambda identity: key if identity == "irrigationd" else b"")
         self.reply = reply
         self.plain_reply = plain_reply
         self.thread = threading.Thread(target=self._serve, daemon=True)
@@ -109,6 +113,48 @@ def test_old_irrigationd_is_detected():
     # The handshake carries no token
     assert TOKEN.encode() not in server.received
     assert psk_key(TOKEN) not in server.received
+
+
+def self_signed_cert(tmp_path):
+    """Write a throwaway self-signed certificate and key, and return their paths."""
+    from datetime import datetime, timedelta, timezone
+
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.x509.oid import NameOID
+
+    key = ec.generate_private_key(ec.SECP256R1())
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "impostor")])
+    now = datetime.now(timezone.utc)
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(name)
+        .issuer_name(name)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - timedelta(minutes=1))
+        .not_valid_after(now + timedelta(days=1))
+        .sign(key, hashes.SHA256())
+    )
+    cert_path, key_path = tmp_path / "cert.pem", tmp_path / "key.pem"
+    cert_path.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
+    key_path.write_bytes(
+        key.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption(),
+        )
+    )
+    return str(cert_path), str(key_path)
+
+
+def test_server_with_a_certificate_is_refused(tmp_path):
+    """A server that skips the key and offers a certificate gets no command."""
+    server = TlsServer(TOKEN, reply=b"OK\n", cert=self_signed_cert(tmp_path))
+    with pytest.raises(TlsRejectedError, match="certificate"):
+        run_tls(server, TOKEN)
+    assert server.received == b""
 
 
 def issue(hass, entry):

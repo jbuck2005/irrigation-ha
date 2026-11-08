@@ -70,9 +70,12 @@ def psk_key(token: str) -> bytes:
 
 def _tls_context(token: str) -> ssl.SSLContext:
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-    # The key proves who irrigationd is, so there is no certificate to check
+    # Only the key proves who irrigationd is. A handshake with the key carries
+    # no certificate, so requiring one that can never be verified (no
+    # certificates are loaded) refuses any server that skips the key and
+    # offers a certificate instead, such as an impostor that doesn't know it.
     ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
+    ctx.verify_mode = ssl.CERT_REQUIRED
     ctx.minimum_version = ssl.TLSVersion.TLSv1_3
     ctx.maximum_version = ssl.TLSVersion.TLSv1_3
     key = psk_key(token)
@@ -96,6 +99,11 @@ def send_tls_command(host: str, port: int, token: str, command: str) -> str:
             # An old irrigationd answers the handshake with a plain text line
             if err.reason == "WRONG_VERSION_NUMBER":
                 raise NotTlsError("irrigationd doesn't support TLS yet") from None
+            if isinstance(err, ssl.SSLCertVerificationError):
+                raise TlsRejectedError(
+                    "The server offered a certificate instead of using the token, "
+                    "so it may not be irrigationd"
+                ) from None
             raise TlsRejectedError("irrigationd refused the TLS handshake. Check the token") from None
         with sock:
             if sock.version() != "TLSv1.3":
