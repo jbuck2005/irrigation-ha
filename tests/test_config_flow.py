@@ -39,7 +39,7 @@ async def test_user_flow_creates_entry(hass, daemon):
     assert data["zone_durations"] == {"1": 600, "2": 600, "3": 600}
     assert data["controller_number"] == 1
     await hass.async_block_till_done()
-    assert daemon.commands == [f"STATUS TOKEN={TOKEN}"]
+    assert daemon.commands == ["STATUS"]
 
 
 @pytest.mark.parametrize(

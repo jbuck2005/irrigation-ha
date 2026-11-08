@@ -19,7 +19,6 @@ from .const import (
     DEFAULT_PORT,
     DEFAULT_ZONES,
     DEFAULT_DURATION,
-    CONF_TOKEN,
     CONF_ZONES,
     CONF_DEFAULT_DURATION,
     CONF_ZONE_DURATIONS,
@@ -27,7 +26,7 @@ from .const import (
     device_info,
     entity_id_prefix,
 )
-from .status import safe_reply, send_command
+from .status import safe_reply
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -50,7 +49,6 @@ class IrrigationZoneValve(ValveEntity):
         port: int,
         zone: int,
         duration: int,
-        token: str,
         id_prefix: str,
         device: dict,
     ):
@@ -66,7 +64,6 @@ class IrrigationZoneValve(ValveEntity):
         self._is_on = False
         self._remaining = 0
         self._duration = duration
-        self._token = token
         self._off_timer = None
         self._tick_task = None
         self._last_command = 0.0
@@ -112,14 +109,15 @@ class IrrigationZoneValve(ValveEntity):
         }
 
     def _build_command(self, zone: int, seconds: int) -> str:
-        """Build a single-line command string to send to irrigationd."""
-        return f"ZONE={zone} TIME={seconds} TOKEN={self._token}"
+        """Build a single-line command, without the token, which the client adds if needed."""
+        return f"ZONE={zone} TIME={seconds}"
 
-    def _send_command(self, command: str) -> str:
-        """Send a command to irrigationd over TCP and return the response."""
+    async def _send_command(self, command: str) -> str:
+        """Send a command to irrigationd and return the response."""
+        client = self.hass.data[DOMAIN][self._entry_id]["client"]
         try:
-            return send_command(self._host, self._port, command)
-        except Exception as e:
+            return await client.async_send(command)
+        except Exception as e:  # noqa: BLE001 - reported to the user as a failed command
             _LOGGER.error(
                 "Error sending command to irrigationd %s:%s -> %s",
                 self._host,
@@ -137,7 +135,7 @@ class IrrigationZoneValve(ValveEntity):
         if duration is None:
             duration = self._default_duration
         command = self._build_command(self._zone, duration)
-        response = await self.hass.async_add_executor_job(self._send_command, command)
+        response = await self._send_command(command)
         self._last_command = time.monotonic()
         if response.startswith("OK"):
             # A run replaces any earlier one, so drop its timers first
@@ -150,7 +148,7 @@ class IrrigationZoneValve(ValveEntity):
     async def async_close_valve(self, **kwargs):
         """Close the valve immediately."""
         command = self._build_command(self._zone, 0)
-        response = await self.hass.async_add_executor_job(self._send_command, command)
+        response = await self._send_command(command)
         self._last_command = time.monotonic()
         if response.startswith("OK"):
             self._mark_closed()
@@ -226,7 +224,6 @@ async def async_setup_entry(hass, entry, async_add_entities):
     zones = entry.data.get(CONF_ZONES, DEFAULT_ZONES)
     default_duration = entry.data.get(CONF_DEFAULT_DURATION, DEFAULT_DURATION)
     zone_durations = entry.data.get(CONF_ZONE_DURATIONS, {})
-    token = entry.data.get(CONF_TOKEN)
 
     entities = []
     for zone in range(1, zones + 1):
@@ -234,7 +231,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
         zone_duration = zone_durations.get(str(zone), default_duration)
         entities.append(
             IrrigationZoneValve(
-                hass, entry.entry_id, host, port, zone, zone_duration, token,
+                hass, entry.entry_id, host, port, zone, zone_duration,
                 entity_id_prefix(entry), device_info(entry),
             )
         )

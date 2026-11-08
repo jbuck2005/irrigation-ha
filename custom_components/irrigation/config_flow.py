@@ -18,6 +18,7 @@ from .const import (
     CONF_DEFAULT_DURATION,
     CONF_ZONE_DURATIONS,
     CONF_CONTROLLER_NUMBER,
+    CONF_TLS,
     MAX_ZONES,
 )
 
@@ -132,12 +133,17 @@ class IrrigationOptionsFlowHandler(config_entries.OptionsFlow):
             # A blank token keeps the stored one
             if not user_input.get(CONF_TOKEN):
                 user_input.pop(CONF_TOKEN, None)
-            
+
+            data = {**self._entry.data, **user_input}
+            # Another host or port may be another irrigationd, so learn again
+            # whether it speaks TLS. A new token alone keeps the same daemon.
+            if (data.get(CONF_HOST), data.get(CONF_PORT)) != (
+                self._entry.data.get(CONF_HOST), self._entry.data.get(CONF_PORT)
+            ):
+                data.pop(CONF_TLS, None)
+
             # Update the config entry with new data
-            self.hass.config_entries.async_update_entry(
-                self._entry,
-                data={**self._entry.data, **user_input}
-            )
+            self.hass.config_entries.async_update_entry(self._entry, data=data)
             
             # Reload the entry to apply changes
             await self.hass.config_entries.async_reload(self._entry.entry_id)

@@ -10,6 +10,8 @@ CONF_ZONES = "zones"
 CONF_DEFAULT_DURATION = "default_duration"
 CONF_ZONE_DURATIONS = "zone_durations"
 CONF_CONTROLLER_NUMBER = "controller_number"
+# Set once irrigationd has answered over TLS: never send the token in plain text again
+CONF_TLS = "tls"
 
 # Defaults
 DEFAULT_PORT = 4242
