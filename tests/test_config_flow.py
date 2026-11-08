@@ -27,8 +27,9 @@ async def start_user_flow(hass):
     return result
 
 
-async def test_user_flow_creates_entry(hass):
+async def test_user_flow_creates_entry(hass, daemon):
     """Setup stores the connection and gives every zone the default run time."""
+    # Finishing the flow sets the entry up, so its first poll goes to the fake daemon
     result = await start_user_flow(hass)
     result = await hass.config_entries.flow.async_configure(result["flow_id"], USER_INPUT)
     assert result["type"] is FlowResultType.CREATE_ENTRY
@@ -37,6 +38,8 @@ async def test_user_flow_creates_entry(hass):
     assert data["host"] == HOST
     assert data["zone_durations"] == {"1": 600, "2": 600, "3": 600}
     assert data["controller_number"] == 1
+    await hass.async_block_till_done()
+    assert daemon.commands == [f"STATUS TOKEN={TOKEN}"]
 
 
 @pytest.mark.parametrize(
