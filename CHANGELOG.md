@@ -16,6 +16,10 @@
 - An optional master valve or pump: a zone, or a Home Assistant switch, that opens before each zone and closes after it, with a lead time of up to 10 seconds. Set it under **Configure**
 - Reloading a controller, such as after saving **Configure**, now closes its zones
 - The valve's `configured_duration` attribute is now the zone's default run time; the length of the current or last run is in `run_duration`
+- **Programs.** Add them with **Add program** on the controller's integration page. Each has up to four start times a day, runs every day, on chosen weekdays, every few days, or on odd or even dates, and waters its zones in order through the run queue
+- Each program is a device with a schedule switch, a **Run now** button, and next and last run sensors. `irrigation.run_program` runs one now
+- If Home Assistant restarts while a program runs, its remaining zones are skipped and a notification says so
+- Needs Home Assistant 2025.3 or later
 
 ## 1.2.1 - 2026-11-08
 First public release. Earlier versions were private and aren't listed here.

@@ -23,6 +23,7 @@ from homeassistant.helpers.typing import ConfigType
 from homeassistant.loader import async_get_integration
 
 from .const import CONF_MASTER_LEAD, CONF_MASTER_SWITCH, CONF_MASTER_ZONE, DEFAULT_PORT
+from .program import Scheduler
 from .runqueue import RunQueue
 from .status import STATUS_INTERVAL, StatusPoller
 
@@ -30,7 +31,7 @@ DOMAIN = "irrigation"
 
 FRONTEND_URL = "/irrigation_frontend"
 PANEL_PATH = "irrigation"
-PLATFORMS = ["valve", "number", "sensor", "button"]
+PLATFORMS = ["valve", "number", "sensor", "button", "switch"]
 
 # Integration is configured only through Config Entries (UI)
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
@@ -87,6 +88,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 entity.async_write_ha_state()
 
     entry.async_on_unload(queue.add_listener(_queue_changed))
+    scheduler = Scheduler(hass, entry, queue)
+    hass.data[DOMAIN][entry.entry_id]["scheduler"] = scheduler
+    # Programs are set up as entities, so adding or removing one needs a reload
+    hass.data[DOMAIN][entry.entry_id]["program_ids"] = {
+        sub.subentry_id for sub in scheduler.programs()
+    }
+    entry.async_on_unload(entry.add_update_listener(_async_entry_updated))
 
     # Forward setup to the valve and number platforms
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -102,6 +110,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN][entry.entry_id]["status"] = poller
     entry.async_on_unload(async_track_time_interval(hass, poller.async_poll, STATUS_INTERVAL))
     hass.async_create_task(poller.async_poll())
+    scheduler.async_start()
 
     if PANEL_PATH not in hass.data.get(frontend.DATA_PANELS, {}):
         await panel_custom.async_register_panel(
@@ -114,6 +123,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
 
     return True
+
+
+async def _async_entry_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Reload only when a program was added or removed.
+
+    Editing a program, turning it on or off, or recording a run updates the
+    entry too, and reloading then would close any zone that's running.
+    """
+    data = hass.data[DOMAIN].get(entry.entry_id)
+    if data is None:
+        return
+    current = {sub.subentry_id for sub in data["scheduler"].programs()}
+    if current != data["program_ids"]:
+        await hass.config_entries.async_reload(entry.entry_id)
+        return
+    data["scheduler"]._changed()
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

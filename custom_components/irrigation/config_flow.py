@@ -9,11 +9,29 @@ import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.selector import (
     EntitySelector,
     EntitySelectorConfig,
+    NumberSelector,
+    NumberSelectorConfig,
+    NumberSelectorMode,
+    SelectSelector,
+    SelectSelectorConfig,
+    SelectSelectorMode,
+    TimeSelector,
     TextSelector,
     TextSelectorConfig,
     TextSelectorType,
 )
 
+from homeassistant.util import dt as dt_util
+
+from .program import (
+    DAY_MODES,
+    DAYS_INTERVAL,
+    DAYS_WEEKDAYS,
+    MAX_START_TIMES,
+    MAX_ZONE_MINUTES,
+    SUBENTRY_PROGRAM,
+    WEEKDAYS,
+)
 from .const import (
     DOMAIN,
     DEFAULT_PORT,
@@ -73,6 +91,12 @@ class IrrigationConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def async_get_options_flow(config_entry):
         """Show the Configure button."""
         return IrrigationOptionsFlowHandler(config_entry)
+
+    @classmethod
+    @callback
+    def async_get_supported_subentry_types(cls, config_entry):
+        """Show the Add program button."""
+        return {SUBENTRY_PROGRAM: ProgramSubentryFlow}
 
     async def async_step_user(self, user_input=None):
         """Handle the initial step where the user provides connection details."""
@@ -193,3 +217,141 @@ class IrrigationOptionsFlowHandler(config_entries.OptionsFlow):
         
         schema = vol.Schema(schema_dict)
         return self.async_show_form(step_id="init", data_schema=schema, errors=errors)
+
+
+def program_schema(defaults: dict, zones: int, master_zone: int, new: bool) -> vol.Schema:
+    """Return the form for adding or editing a program."""
+    schema = {}
+    if new:
+        schema[vol.Required("name", default=defaults.get("name", ""))] = str
+    times = defaults.get("start_times", [])
+    for index in range(MAX_START_TIMES):
+        key = f"start_{index + 1}"
+        if index < len(times):
+            schema[vol.Optional(key, default=times[index])] = TimeSelector()
+        else:
+            schema[vol.Optional(key)] = TimeSelector()
+    schema[vol.Required("days", default=defaults.get("days") or DAY_MODES[0])] = SelectSelector(
+        SelectSelectorConfig(options=DAY_MODES, translation_key="days", mode=SelectSelectorMode.LIST)
+    )
+    schema[vol.Optional("weekdays", default=defaults.get("weekdays", []))] = SelectSelector(
+        SelectSelectorConfig(options=WEEKDAYS, translation_key="weekdays", multiple=True)
+    )
+    schema[vol.Optional("interval", default=defaults.get("interval", 2))] = NumberSelector(
+        NumberSelectorConfig(min=2, max=30, step=1, mode=NumberSelectorMode.BOX)
+    )
+    minutes = defaults.get("zone_minutes", {})
+    for zone in range(1, zones + 1):
+        if zone == master_zone:
+            continue
+        schema[vol.Optional(f"zone_{zone}_minutes", default=minutes.get(str(zone), 0))] = (
+            NumberSelector(
+                NumberSelectorConfig(
+                    min=0, max=MAX_ZONE_MINUTES, step=1, mode=NumberSelectorMode.BOX,
+                    unit_of_measurement="min",
+                )
+            )
+        )
+    return vol.Schema(schema)
+
+
+def program_data(user_input: dict, zones: int) -> tuple[dict, dict]:
+    """Turn the form's answers into program data, and return any errors."""
+    errors = {}
+    times = sorted(
+        {user_input[f"start_{i + 1}"][:5] for i in range(MAX_START_TIMES) if user_input.get(f"start_{i + 1}")}
+    )
+    if not times:
+        errors["start_1"] = "no_start_time"
+    zone_minutes = {
+        str(zone): int(user_input.get(f"zone_{zone}_minutes", 0) or 0) for zone in range(1, zones + 1)
+    }
+    zone_minutes = {zone: minutes for zone, minutes in zone_minutes.items() if minutes > 0}
+    if not zone_minutes:
+        errors["base"] = "no_zones"
+    days = user_input.get("days", DAY_MODES[0])
+    weekdays = [day for day in WEEKDAYS if day in user_input.get("weekdays", [])]
+    if days == DAYS_WEEKDAYS and not weekdays:
+        errors["weekdays"] = "no_weekdays"
+    data = {
+        "start_times": times,
+        "days": days,
+        "weekdays": weekdays,
+        "interval": int(user_input.get("interval", 2) or 2),
+        "zone_minutes": zone_minutes,
+    }
+    return data, errors
+
+
+class ProgramSubentryFlow(config_entries.ConfigSubentryFlow):
+    """Add or edit a watering program."""
+
+    def _zones(self) -> tuple[int, int]:
+        entry = self._get_entry()
+        return entry.data.get(CONF_ZONES, DEFAULT_ZONES), entry.data.get(CONF_MASTER_ZONE, 0)
+
+    async def async_step_user(self, user_input=None):
+        """Add a program."""
+        zones, master_zone = self._zones()
+        errors = {}
+        if user_input is not None:
+            data, errors = program_data(user_input, zones)
+            name = user_input.get("name", "").strip()
+            if not name:
+                errors["name"] = "no_name"
+            if not errors:
+                today = dt_util.now().date().isoformat()
+                data.update(enabled=True, anchor=today, last_run=None, running_since=None)
+                return self.async_create_entry(title=name, data=data)
+        defaults = user_input or {}
+        return self.async_show_form(
+            step_id="user",
+            data_schema=program_schema(_form_defaults(defaults), zones, master_zone, new=True),
+            errors=errors,
+        )
+
+    async def async_step_reconfigure(self, user_input=None):
+        """Edit a program. Its name, history and on/off state are kept."""
+        subentry = self._get_reconfigure_subentry()
+        zones, master_zone = self._zones()
+        errors = {}
+        if user_input is not None:
+            data, errors = program_data(user_input, zones)
+            if not errors:
+                anchor = subentry.data.get("anchor")
+                if data["days"] == DAYS_INTERVAL and (
+                    data["interval"] != subentry.data.get("interval")
+                    or subentry.data.get("days") != DAYS_INTERVAL
+                ):
+                    # A new interval counts from today
+                    anchor = dt_util.now().date().isoformat()
+                return self.async_update_and_abort(
+                    self._get_entry(), subentry, data={**subentry.data, **data, "anchor": anchor}
+                )
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=program_schema(
+                _form_defaults(user_input) if user_input else dict(subentry.data),
+                zones, master_zone, new=False,
+            ),
+            errors=errors,
+        )
+
+
+def _form_defaults(user_input: dict) -> dict:
+    """Turn submitted answers back into defaults, so a form with errors keeps them."""
+    if not user_input:
+        return {}
+    return {
+        "name": user_input.get("name", ""),
+        "start_times": [
+            user_input[f"start_{i + 1}"] for i in range(MAX_START_TIMES) if user_input.get(f"start_{i + 1}")
+        ],
+        "days": user_input.get("days"),
+        "weekdays": user_input.get("weekdays", []),
+        "interval": user_input.get("interval", 2),
+        "zone_minutes": {
+            key.split("_")[1]: value for key, value in user_input.items()
+            if key.startswith("zone_") and key.endswith("_minutes")
+        },
+    }

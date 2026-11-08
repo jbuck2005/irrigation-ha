@@ -20,3 +20,10 @@ run:
 stop_all:
   name: Stop all
   description: Clear every controller's run queue and close all zones and master valves.
+run_program:
+  name: Run program
+  description: Run a program now, whether or not its schedule is on. Its zones queue behind any zone already running.
+  target:
+    entity:
+      integration: irrigation
+      domain: switch
