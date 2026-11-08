@@ -1,0 +1,65 @@
+blueprint:
+  name: Irrigation Cycle
+  description: >
+    Run irrigation zones sequentially with configurable durations per zone.
+    Requires the Irrigation integration (irrigation-ha).
+  domain: automation
+  input:
+    start_time:
+      name: Start Time
+      description: When to run the irrigation cycle.
+      selector:
+        time: {}
+    zones:
+      name: Zones
+      description: List of irrigation zone valves to run in sequence.
+      selector:
+        target:
+          entity:
+            integration: irrigation
+            domain: valve
+    durations:
+      name: Zone Durations (seconds)
+      description: >
+        A list of durations (in seconds) for each zone. The number of entries must
+        match the number of zones. Example: [300, 600, 300].
+      default: []
+      selector:
+        text: {}
+
+trigger:
+  - platform: time
+    at: !input start_time
+
+action:
+  - variables:
+      zone_entities: !input zones
+      durations: !input durations
+  - repeat:
+      count: "{{ zone_entities.entity_id | count }}"
+      sequence:
+        - variables:
+            current_zone: "{{ zone_entities.entity_id[repeat.index-1] }}"
+            current_duration: >
+              {% set d = durations.split(',') if durations else [] %}
+              {% if d|length >= repeat.index %}
+              {{ d[repeat.index-1] | int }}
+              {% else %}
+              300
+              {% endif %}
+        # A zone that fails must not cancel the zones after it
+        - service: irrigation.run
+          continue_on_error: true
+          target:
+            entity_id: "{{ current_zone }}"
+          data:
+            duration: "{{ current_duration }}"
+        - delay:
+            seconds: "{{ current_duration }}"
+        - service: valve.close_valve
+          continue_on_error: true
+          target:
+            entity_id: "{{ current_zone }}"
+          data: {}
+
+mode: single

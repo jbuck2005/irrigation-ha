@@ -1,0 +1,49 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Irrigation Controller",
+        "description": "Connect to irrigationd. The token is the IRRIGATIOND_TOKEN value on the irrigationd host.",
+        "data": {
+          "name": "Name",
+          "host": "Host",
+          "port": "Port",
+          "zones": "Number of zones",
+          "default_duration": "Default run time (seconds)",
+          "token": "Token"
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Irrigation Controller",
+        "data": {
+          "host": "Host",
+          "port": "Port",
+          "zones": "Number of zones",
+          "default_duration": "Default run time (seconds)",
+          "token": "Token",
+          "zone_1_duration": "Zone 1 run time (seconds)",
+          "zone_2_duration": "Zone 2 run time (seconds)",
+          "zone_3_duration": "Zone 3 run time (seconds)",
+          "zone_4_duration": "Zone 4 run time (seconds)",
+          "zone_5_duration": "Zone 5 run time (seconds)",
+          "zone_6_duration": "Zone 6 run time (seconds)",
+          "zone_7_duration": "Zone 7 run time (seconds)",
+          "zone_8_duration": "Zone 8 run time (seconds)",
+          "zone_9_duration": "Zone 9 run time (seconds)",
+          "zone_10_duration": "Zone 10 run time (seconds)",
+          "zone_11_duration": "Zone 11 run time (seconds)",
+          "zone_12_duration": "Zone 12 run time (seconds)",
+          "zone_13_duration": "Zone 13 run time (seconds)",
+          "zone_14_duration": "Zone 14 run time (seconds)"
+        },
+        "data_description": {
+          "token": "Leave blank to keep the current token."
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,19 @@
+run:
+  name: Run
+  description: Run zone valves for a custom duration. If no duration is specified, uses each zone's configured default duration.
+  target:
+    entity:
+      integration: irrigation
+      domain: valve
+  fields:
+    duration:
+      description: Duration in seconds (optional - uses zone default if not specified)
+      required: false
+      example: 300
+      selector:
+        number:
+          min: 10
+          max: 7200
+          step: 10
+          unit_of_measurement: "s"
+          mode: box
