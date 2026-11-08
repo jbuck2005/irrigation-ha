@@ -37,21 +37,23 @@ Provides:
 
 ## Installation
 
+Irrigation Controller isn't in the HACS default list yet. It has been submitted ([hacs/default#13725](https://github.com/hacs/default/pull/13725)), and until that's merged you add it as a **custom repository**, as below. Once it's merged, you can search for **Irrigation Controller** without adding the repository first.
+
 ### Marketplace (Home Assistant 2026.11 and later)
-HACS is built into Home Assistant as the Marketplace from 2026.11. This integration is not in the main catalog yet, so add it as a custom repository, which needs a GitHub connection:
+HACS is built into Home Assistant as the Marketplace from 2026.11. Adding a custom repository needs a GitHub connection.
 
 1. Go to **Settings → Marketplace** and open **Custom repositories**.
-2. Add this repo URL:  
+2. Add this repository URL:  
    `https://github.com/jbuck2005/irrigation-ha`
-3. Select category: **Integration**.
-4. Install and restart Home Assistant.
+3. Select the type **Integration**, and add it.
+4. Find **Irrigation Controller**, download it and restart Home Assistant.
 
 ### HACS (before 2026.11)
-1. Go to **HACS → Integrations → Custom repositories**.
-2. Add this repo URL:  
+1. Open **HACS**, select the **⋮** menu in the top right, and select **Custom repositories**.
+2. Add this repository URL:  
    `https://github.com/jbuck2005/irrigation-ha`
-3. Select category: **Integration**.
-4. Install and restart Home Assistant.
+3. Select the type **Integration**, and add it.
+4. Find **Irrigation Controller**, download it and restart Home Assistant.
 
 ### Manual
 1. Copy the `custom_components/irrigation` folder into  
