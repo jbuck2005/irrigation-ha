@@ -3,6 +3,7 @@
 ## Unreleased
 
 - README: screenshots, troubleshooting, updating/removing and security sections; blueprint durations hint fixed
+- The integration is listed under the **Garden & plants** category in Home Assistant
 
 ## 1.2.1 - 2026-11-08
 First public release. Earlier versions were private and aren't listed here.

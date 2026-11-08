@@ -1,6 +1,9 @@
 {
   "domain": "irrigation",
   "name": "Irrigation Controller",
+  "categories": [
+    "garden_plants"
+  ],
   "codeowners": [
     "@jbuck2005"
   ],
