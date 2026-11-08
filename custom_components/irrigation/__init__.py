@@ -19,6 +19,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.loader import async_get_integration
 
@@ -97,6 +98,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN][entry.entry_id]["status"] = poller
     entry.async_on_unload(async_track_time_interval(hass, poller.async_poll, STATUS_INTERVAL))
     hass.async_create_task(poller.async_poll())
+    # A pump left on by a crash or a failed turn-off would run against closed
+    # valves, so the master switch starts off, once the switch has loaded
+    failsafe = []
+
+    @callback
+    def _master_failsafe(_hass: HomeAssistant) -> None:
+        failsafe.append(queue.async_master_failsafe())
+
+    @callback
+    def _stop_failsafe() -> None:
+        for stop in failsafe:
+            stop()
+
+    entry.async_on_unload(async_at_started(hass, _master_failsafe))
+    entry.async_on_unload(_stop_failsafe)
 
     if PANEL_PATH not in hass.data.get(frontend.DATA_PANELS, {}):
         await panel_custom.async_register_panel(

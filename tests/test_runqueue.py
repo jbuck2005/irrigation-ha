@@ -239,3 +239,72 @@ async def test_one_call_for_several_zones_runs_them_in_turn(hass, loaded, daemon
         z for z in (1, 2, 3) if hass.states.get(f"valve.irrigation_zone_{z}").state == "open"
     ]
     assert len(open_valves) == 1
+
+
+def stuck_issue(hass, entry):
+    from homeassistant.helpers import issue_registry as ir
+
+    return ir.async_get(hass).async_get_issue(DOMAIN, f"master_switch_stuck_{entry.entry_id}")
+
+
+async def test_master_switch_left_on_is_turned_off_at_startup(hass, daemon):
+    """A pump left on, such as by a crash mid-run, is turned off when the controller loads."""
+    assert await async_setup_component(hass, "input_boolean", {"input_boolean": {"pump": {"initial": True}}})
+    assert hass.states.get("input_boolean.pump").state == "on"
+    await setup_with(hass, daemon, master_switch="input_boolean.pump")
+    await settle(hass)
+    assert hass.states.get("input_boolean.pump").state == "off"
+
+
+async def test_master_switch_is_turned_off_once_it_loads(hass, daemon):
+    """A switch that isn't available yet at startup is turned off as soon as it is."""
+    await setup_with(hass, daemon, master_switch="switch.pump")
+    hass.states.async_set("switch.pump", "unavailable")
+    await settle(hass)
+    calls = []
+
+    async def turn_off(call):
+        calls.append(call.data["entity_id"])
+        hass.states.async_set("switch.pump", "off")
+
+    hass.services.async_register("switch", "turn_off", turn_off)
+    hass.states.async_set("switch.pump", "on")
+    await settle(hass)
+    assert calls == ["switch.pump"]
+
+    # Only once: turning the pump on by hand later is left alone
+    hass.states.async_set("switch.pump", "on")
+    await settle(hass)
+    assert calls == ["switch.pump"]
+
+
+async def test_master_switch_that_wont_turn_off_raises_an_issue(hass, daemon):
+    """A failed turn-off is a Repairs issue, cleared when a later turn-off works."""
+    hass.states.async_set("switch.pump", "off")
+    entry = await setup_with(hass, daemon, master_switch="switch.pump", master_lead=0)
+    fail = True
+
+    async def turn_on(call):
+        hass.states.async_set("switch.pump", "on")
+
+    async def turn_off(call):
+        if fail:
+            raise HomeAssistantError("relay not responding")
+        hass.states.async_set("switch.pump", "off")
+
+    hass.services.async_register("switch", "turn_on", turn_on)
+    hass.services.async_register("switch", "turn_off", turn_off)
+
+    await open_zone(hass, ZONE_1)
+    await hass.services.async_call("irrigation", "stop_all", {}, blocking=True)
+    await settle(hass)
+    assert stuck_issue(hass, entry) is not None
+    # The zones still closed
+    assert hass.states.get(ZONE_1).state == "closed"
+
+    fail = False
+    await open_zone(hass, ZONE_1)
+    await hass.services.async_call("irrigation", "stop_all", {}, blocking=True)
+    await settle(hass)
+    assert hass.states.get("switch.pump").state == "off"
+    assert stuck_issue(hass, entry) is None

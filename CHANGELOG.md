@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Over TLS, a server that offers a certificate instead of using the token is refused, so a device pretending to be `irrigationd` can't fake its replies
+- A master switch, such as a pump, is turned off when the controller starts (or as soon as the switch becomes available), so a pump left on by a crash doesn't keep running against closed valves. If turning it off fails, Repairs shows a notice
 - Commands go over TLS 1.3 with the token as the key when `irrigationd` supports it, so the token no longer crosses the network. An older `irrigationd` still works, with a Repairs notice, and once TLS has worked with a controller the token is never sent to it in plain text again
 - README: screenshots, troubleshooting, updating/removing and security sections; blueprint durations hint fixed
 - The integration is listed under the **Garden & plants** category in Home Assistant
