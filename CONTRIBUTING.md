@@ -17,6 +17,7 @@ Problems with the daemon itself belong in [irrigationd](https://github.com/jbuck
 1. Fork the repo and create a branch named `dev/<topic>`.
 2. Keep each pull request to one change.
 3. Run `python -m py_compile custom_components/irrigation/*.py` before committing.
+   Run the test suite too with `pytest`; see [`tests/README.md`](tests/README.md) for setup.
 4. Test with a running Home Assistant. A Docker install pointed at a simulated `irrigationd` is fine. Say in the pull request how you tested, and whether it ran on real valves.
 5. Update the README if behaviour changes, and add a line to [`CHANGELOG.md`](CHANGELOG.md).
 6. Open a pull request and fill in the template.

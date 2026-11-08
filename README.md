@@ -15,6 +15,9 @@ Provides:
 - An **Irrigation** sidebar panel and a dashboard card for controlling your zones
 - **A valve for each zone**, grouped under a single device
 - **A default run time for each zone**, with a number entity to change it
+- **Zones run one at a time**: starting a zone while another runs queues it, with **Stop all** and **Skip zone** buttons and status sensors
+- An optional master valve or pump that opens with every zone
+- Commands sent over TLS with the token as the key, when `irrigationd` supports it
 - Zone state read from `irrigationd`, so runs started elsewhere show up and survive a Home Assistant restart
 - Host, port and token set in the UI, with the token matching `IRRIGATIOND_TOKEN` on the irrigationd host
 - A bundled automation blueprint for watering zones one after another
@@ -123,7 +126,9 @@ After setup, **Irrigation** appears in the sidebar, with nothing else to install
 
 - Start or stop a zone, and see the time left
 - Change a zone's default run time, from 10 seconds to 2 hours
-- Stop everything with **Stop all**, which shows while a zone is running
+- Stop everything with **Stop all**, which shows while a zone is running or waiting, and also clears the queue
+
+Only one zone per controller runs at a time. Starting another zone shows it as **Waiting its turn**, and it starts when the zones ahead of it finish. Its button changes to **Cancel**. A master valve zone shows as **Master valve** and has no Start button, because it opens with the other zones.
 
 If a command fails, the zone shows a warning with the reason. A warning on a stopped zone means it may still be running, so check the controller.
 
@@ -131,7 +136,7 @@ If a command fails, the zone shows a warning with the reason. A warning on a sto
 
 The integration checks the real zone state with `irrigationd` every 15 seconds, so runs started elsewhere show up and a running zone survives a Home Assistant restart. If it can't read the state for 45 seconds, the zones show as unavailable.
 
-To rename a zone, rename its valve in Home Assistant and the panel follows.
+To rename a zone, rename its valve in Home Assistant and the panel follows. Reloading a controller, such as after saving **Configure**, closes its zones.
 
 ### Dashboard card
 
@@ -150,14 +155,21 @@ A second controller adds its number after `irrigation`, such as `valve.irrigatio
 
 ### Valves
 - `valve.irrigation_zone_X` → Zone valve for each irrigation zone, with the state `open` or `closed`
-- Each valve has a `remaining` attribute showing countdown time
-- Each valve has a `configured_duration` attribute showing the last run's duration
-- Each valve has a `zone` attribute with its zone number
+- Attributes: `remaining` (seconds left), `configured_duration` (the zone's default run time), `run_duration` (the current or last run), `queued` (waiting its turn), `master` (it's the master valve) and `zone` (its number)
+
+### Buttons
+- `button.irrigation_stop_all` clears the queue and closes every zone and the master valve
+- `button.irrigation_skip` ends the running zone early and starts the next one in the queue
+
+### Sensors
+- `sensor.irrigation_status` is `idle` or `running`, with `current_zone`, `ends_in` (seconds) and `queue` attributes
+- `sensor.irrigation_queued_runs` counts the runs waiting, with their total `queued_seconds`
 
 ### Actions
 - `valve.open_valve` runs a zone for its default run time
-- `irrigation.run` runs one or more zones, with an optional `duration` from 10 to 7200 seconds
-- `valve.close_valve` stops a zone early
+- `irrigation.run` runs one or more zones, with an optional `duration` from 10 to 7200 seconds. Zones beyond the first wait in the queue
+- `valve.close_valve` stops a running zone, which starts the next one, or cancels a waiting one
+- `irrigation.stop_all` clears every controller's queue and closes all zones and master valves
 
 If `irrigationd` refuses a command, the action fails with its reply, which stops an automation at that step. Add `continue_on_error: true` to a step that should carry on regardless. The blueprint already does this.
 
@@ -241,6 +253,8 @@ Durations are comma-separated, in the same order as the zones, without brackets.
 
 Pick the zone valves one by one. Choosing an area or a device in the zone picker runs nothing.
 
+Because zones queue, an automation can also call `irrigation.run` once with several zones, and they run one after another, each for its default run time unless a duration is given.
+
 ### YAML snippet
 
 ```yaml
@@ -271,6 +285,9 @@ use_blueprint:
 - **Zones show as unavailable**: Home Assistant couldn't read zone state from `irrigationd` for 45 seconds. Check that `irrigationd` is running, and that the host and port under **Configure** are right.
 - **A stopped zone shows a warning in the panel**: the stop command failed, so the valve may still be open. Check the controller.
 - **A zone won't restart**: it reached the 2-hour limit and can't run again for up to 10 minutes unless it's stopped first.
+- **A zone shows "Waiting its turn"**: another zone on the same controller is running. Use **Skip zone** to move on, or **Stop all** to clear the queue.
+- **A Repairs notice says the master switch didn't turn off**: Home Assistant couldn't turn off your master switch after starting. If it's a pump, turn it off by hand now.
+- **A Repairs notice says the token is sent in plain text**: see [Security and privacy](#security-and-privacy).
 
 Logs are under **Settings → System → Logs**. The token is never written to them. Remove host names and addresses before sharing logs.
 
