@@ -27,7 +27,7 @@ from .const import (
     device_info,
     entity_id_prefix,
 )
-from .status import send_command
+from .status import safe_reply, send_command
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -124,7 +124,7 @@ class IrrigationZoneValve(ValveEntity):
                 "Error sending command to irrigationd %s:%s -> %s",
                 self._host,
                 self._port,
-                e,
+                safe_reply(str(e)),
             )
             return f"ERR {e}"
 
@@ -145,7 +145,7 @@ class IrrigationZoneValve(ValveEntity):
             self._duration = duration
             self._start_countdown(duration)
         else:
-            raise HomeAssistantError(f"Zone {self._zone} didn't start: {response}")
+            raise HomeAssistantError(f"Zone {self._zone} didn't start: {safe_reply(response)}")
 
     async def async_close_valve(self, **kwargs):
         """Close the valve immediately."""
@@ -155,7 +155,7 @@ class IrrigationZoneValve(ValveEntity):
         if response.startswith("OK"):
             self._mark_closed()
         else:
-            raise HomeAssistantError(f"Zone {self._zone} didn't stop: {response}")
+            raise HomeAssistantError(f"Zone {self._zone} didn't stop: {safe_reply(response)}")
 
     def apply_status(self, is_on, seconds, started):
         """Follow irrigationd, unless a command has changed things since `started`."""
@@ -190,7 +190,10 @@ class IrrigationZoneValve(ValveEntity):
                 self._remaining -= 1
                 self.async_write_ha_state()
 
-        self._tick_task = self.hass.async_create_task(_tick_remaining())
+        # A background task, so a long run doesn't hold up startup or reloads
+        self._tick_task = self.hass.async_create_background_task(
+            _tick_remaining(), f"irrigation zone {self._zone} countdown"
+        )
 
         # Schedule auto-off after the countdown
         self._off_timer = self.hass.loop.call_later(seconds, self._mark_closed)

@@ -1,0 +1,57 @@
+"""A stand-in for irrigationd that speaks its line protocol, for tests.
+
+It never opens a real valve. Tests patch ``send_command`` to call
+``FakeIrrigationd.handle`` instead of opening a TCP connection.
+"""
+
+import re
+
+COMMAND = re.compile(r"^ZONE=(\d+) TIME=(\d+) TOKEN=(\S+)$")
+STATUS = re.compile(r"^STATUS TOKEN=(\S+)$")
+MAX_TIME = 7200
+
+
+class FakeIrrigationd:
+    """Keep zone state in memory and answer like irrigationd does."""
+
+    def __init__(self, token="test-token", zones=14):
+        """Start with every zone off."""
+        self.token = token
+        self.zones = {zone: 0 for zone in range(1, zones + 1)}
+        self.commands = []
+        # Set to make the next replies fail: an exception to raise, or a reply string
+        self.fail_with = None
+
+    def run(self, zone, seconds):
+        """Start or stop a zone as if someone else had done it."""
+        self.zones[zone] = seconds
+
+    def handle(self, command):
+        """Return irrigationd's reply to one command line."""
+        self.commands.append(command)
+        if isinstance(self.fail_with, BaseException):
+            raise self.fail_with
+        if isinstance(self.fail_with, str):
+            return self.fail_with
+
+        if match := STATUS.match(command):
+            if match[1] != self.token:
+                return "ERR invalid token"
+            fields = " ".join(
+                f"Z{zone}={'ON' if left else 'OFF'}:{left}"
+                for zone, left in self.zones.items()
+            )
+            return f"OK STATUS V=1 ZONES={len(self.zones)} {fields}"
+
+        if match := COMMAND.match(command):
+            zone, seconds, token = int(match[1]), int(match[2]), match[3]
+            if token != self.token:
+                return "ERR invalid token"
+            if zone not in self.zones:
+                return "ERR invalid zone"
+            if seconds > MAX_TIME:
+                return "ERR invalid time"
+            self.zones[zone] = seconds
+            return "OK"
+
+        return "ERR invalid command"

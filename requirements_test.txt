@@ -1,0 +1,4 @@
+# Test tools only. Home Assistant itself comes with this package.
+pytest-homeassistant-custom-component
+# The panel needs the frontend, which the test package leaves out
+home-assistant-frontend
