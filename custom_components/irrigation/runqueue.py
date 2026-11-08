@@ -56,6 +56,8 @@ class RunQueue:
         self.current_ends = 0.0
         self._task: asyncio.Task | None = None
         self._advance = asyncio.Event()
+        # Held while deciding whether to start or queue, and while the first zone opens
+        self._lock = asyncio.Lock()
         self._stopping = False
         self._listeners: list[Callable[[], None]] = []
 
@@ -91,19 +93,22 @@ class RunQueue:
             )
         self._valve(zone)
         run = QueuedRun(zone, seconds)
-        if self._task is not None:
-            # A newer start for a waiting zone replaces the older one
-            self.remove(zone)
-            self.waiting.append(run)
-            self._changed()
-            return
+        # One action on several zones calls this for each at the same time, so
+        # the idle check and the first zone's start must happen as one step
+        async with self._lock:
+            if self._task is not None:
+                # A newer start for a waiting zone replaces the older one
+                self.remove(zone)
+                self.waiting.append(run)
+                self._changed()
+                return
 
-        # Idle: start it here, so a refusal fails the action that asked for it
-        self._stopping = False
-        await self._open(run)
-        self._task = self.hass.async_create_background_task(
-            self._worker(run), f"irrigation run queue {self._entry_id}"
-        )
+            # Idle: start it here, so a refusal fails the action that asked for it
+            self._stopping = False
+            await self._open(run)
+            self._task = self.hass.async_create_background_task(
+                self._worker(run), f"irrigation run queue {self._entry_id}"
+            )
 
     def remove(self, zone: int) -> bool:
         """Drop a waiting run of `zone`; return true if there was one."""
@@ -123,6 +128,9 @@ class RunQueue:
         """Clear the queue and close every zone and the master valve."""
         self._stopping = True
         self.waiting.clear()
+        # Wait for a zone that's being started right now, so it gets stopped too
+        async with self._lock:
+            pass
         self._advance.set()
         task = self._task
         if task is not None:

@@ -204,3 +204,22 @@ async def test_master_switch_follows_the_queue(hass, daemon):
     await hass.services.async_call("irrigation", "stop_all", {}, blocking=True)
     await settle(hass)
     assert hass.states.get("input_boolean.pump").state == "off"
+
+
+async def test_one_call_for_several_zones_runs_them_in_turn(hass, loaded, daemon):
+    """irrigation.run on several zones at once opens one and queues the rest."""
+    await hass.services.async_call(
+        "irrigation",
+        "run",
+        {"entity_id": [ZONE_1, ZONE_2, "valve.irrigation_zone_3"], "duration": 10},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+    starts = [c for c in daemon.sent() if not c.endswith("TIME=0")]
+    assert len(starts) == 1
+    queue = queue_of(hass, loaded)
+    assert len(queue.waiting) == 2
+    open_valves = [
+        z for z in (1, 2, 3) if hass.states.get(f"valve.irrigation_zone_{z}").state == "open"
+    ]
+    assert len(open_valves) == 1
