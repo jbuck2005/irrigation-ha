@@ -37,13 +37,17 @@ def daemon():
     """Replace the TCP connection to irrigationd with a fake daemon."""
     fake = FakeIrrigationd(token=TOKEN)
 
-    def send(host, port, command):
+    def send_plain(host, port, command):
         assert (host, port) == (HOST, PORT)
-        return fake.handle(command)
+        return fake.handle_plain(command)
+
+    def send_tls(host, port, token, command):
+        assert (host, port) == (HOST, PORT)
+        return fake.handle_tls(token, command)
 
     with (
-        patch("custom_components.irrigation.status.send_command", side_effect=send),
-        patch("custom_components.irrigation.valve.send_command", side_effect=send),
+        patch("custom_components.irrigation.status.send_command", side_effect=send_plain),
+        patch("custom_components.irrigation.status.send_tls_command", side_effect=send_tls),
     ):
         yield fake
 

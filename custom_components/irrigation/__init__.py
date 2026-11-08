@@ -22,9 +22,9 @@ from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.loader import async_get_integration
 
-from .const import CONF_MASTER_LEAD, CONF_MASTER_SWITCH, CONF_MASTER_ZONE, DEFAULT_PORT
+from .const import CONF_MASTER_LEAD, CONF_MASTER_SWITCH, CONF_MASTER_ZONE
 from .runqueue import RunQueue
-from .status import STATUS_INTERVAL, StatusPoller
+from .status import STATUS_INTERVAL, IrrigationdClient, StatusPoller
 
 DOMAIN = "irrigation"
 
@@ -67,6 +67,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Store config and entities in a structured dict
     hass.data[DOMAIN][entry.entry_id] = {
         "config": entry.data,
+        "client": IrrigationdClient(hass, entry),
         "entities": [],
         "number_entities": [],
     }
@@ -92,13 +93,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     # Read the real zone state now, so a run that outlasted a restart shows up
-    poller = StatusPoller(
-        hass,
-        entry.entry_id,
-        entry.data.get("host", "127.0.0.1"),
-        entry.data.get("port", DEFAULT_PORT),
-        entry.data.get("token"),
-    )
+    poller = StatusPoller(hass, entry.entry_id, hass.data[DOMAIN][entry.entry_id]["client"])
     hass.data[DOMAIN][entry.entry_id]["status"] = poller
     entry.async_on_unload(async_track_time_interval(hass, poller.async_poll, STATUS_INTERVAL))
     hass.async_create_task(poller.async_poll())

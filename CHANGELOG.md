@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Commands go over TLS 1.3 with the token as the key when `irrigationd` supports it, so the token no longer crosses the network. An older `irrigationd` still works, with a Repairs notice, and once TLS has worked with a controller the token is never sent to it in plain text again
 - README: screenshots, troubleshooting, updating/removing and security sections; blueprint durations hint fixed
 - The integration is listed under the **Garden & plants** category in Home Assistant
 - Setup and **Configure** check the default run time (10 seconds to 2 hours) and the port, and refuse a host or token containing spaces or control characters

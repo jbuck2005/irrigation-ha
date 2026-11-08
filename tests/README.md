@@ -3,7 +3,8 @@
 The tests run Home Assistant's own test harness against a fake `irrigationd`
 (`fake_irrigationd.py`). They never open a TCP connection to a real controller
 and never open a valve, so they're safe to run anywhere. The only real sockets
-are a few in `test_status.py`, which talk to a throwaway server on `127.0.0.1`.
+are a few in `test_status.py` and `test_tls.py`, which talk to a throwaway
+server over a local socket pair.
 
 They run on your own machine, so they don't need GitHub Actions minutes.
 

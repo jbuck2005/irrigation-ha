@@ -25,7 +25,7 @@ Provides:
 </p>
 
 ### Requirements
-- Home Assistant 2024.7 or later
+- Home Assistant 2024.7 or later, and 2025.2 or later to keep the token off the network (see [Security and privacy](#security-and-privacy))
 - [`irrigationd`](https://github.com/jbuck2005/irrigationd) running and reachable from Home Assistant, with a token set and the `STATUS` command, which Home Assistant uses to read zone state
 - Up to 14 zones per controller
 
@@ -271,7 +271,9 @@ Logs are under **Settings → System → Logs**. The token is never written to t
 ## Security and privacy
 
 - Everything stays on your local network. The integration talks only to `irrigationd`, and sends nothing to the internet.
-- Commands, including the token, go to `irrigationd` as plain text over TCP. Keep `irrigationd` reachable only from your local network, never from the internet.
+- With an `irrigationd` that supports TLS and Home Assistant 2025.2 or later, every command goes over TLS 1.3 using the token as the key, so the token never crosses the network and nobody on it can read, change or replay commands. There are no certificates to set up.
+- With an older `irrigationd`, the token goes as plain text, and Home Assistant shows a notice under **Settings → Repairs** until you update it. Once Home Assistant has used TLS with a controller, it never sends that controller the token in plain text again. After updating, add `IRRIGATIOND_PLAIN_TOKEN=no` to `/etc/default/irrigationd` and restart it.
+- Either way, keep `irrigationd` reachable only from your local network, never from the internet.
 - Home Assistant stores the token in its configuration, like other integrations' credentials. The token field is hidden in the UI and never sent back to the browser.
 - `irrigationd` limits failed token attempts. Set `IRRIGATIOND_TRUSTED_ADDR` on the irrigationd host to Home Assistant's address, so a flood of bad attempts can't block its commands.
 
