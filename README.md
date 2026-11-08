@@ -103,6 +103,14 @@ If you change **Number of zones**, submit, then open **Configure** again to set 
   <img src="docs/screenshots/configure.png" alt="The Configure dialog with host, port, number of zones, default run time, a hidden token field and a run time for each zone" width="45%">
 </p>
 
+### Master valve or pump
+
+If your system has a master valve or pump, set it under **Configure**. It opens before each zone, after an optional lead time of up to 10 seconds, and closes after it.
+
+Wire it to `irrigationd` and set it as the **master zone** if you can. `irrigationd`'s own timer then closes it with each zone, and no run passes 2 hours, even if Home Assistant crashes or loses its connection.
+
+A **master switch** is a Home Assistant switch instead. It has no timer of its own, so if Home Assistant goes down mid-run, it stays on until Home Assistant starts again and turns it off. If that turn-off fails, **Repairs** shows a notice.
+
 ### Changing the token
 
 Change `IRRIGATIOND_TOKEN` on the irrigationd host and restart `irrigationd`, then enter the same value under **Configure**. The token field is hidden and starts empty, and leaving it blank keeps the current token. Until both sides match, commands fail with `ERR token`.
