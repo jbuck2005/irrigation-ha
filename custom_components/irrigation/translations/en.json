@@ -176,5 +176,15 @@
         "sun": "Sunday"
       }
     }
+  },
+  "issues": {
+    "plain_token": {
+      "title": "{name}: the irrigationd token is sent in plain text",
+      "description": "irrigationd on {name} doesn't support TLS yet, so Home Assistant sends the token in plain text, where anyone watching the network can read it. Update irrigationd on the controller and reinstall it with `sudo make install`. Home Assistant switches to TLS by itself within an hour, and this notice goes away. Then add `IRRIGATIOND_PLAIN_TOKEN=no` to `/etc/default/irrigationd` and restart irrigationd."
+    },
+    "plain_token_old_python": {
+      "title": "{name}: the irrigationd token is sent in plain text",
+      "description": "This version of Home Assistant can't use TLS with a pre-shared key, so the irrigationd token on {name} is sent in plain text, where anyone watching the network can read it. Update Home Assistant to 2025.2 or later, and this notice goes away once {name} connects over TLS. Until then, keep `IRRIGATIOND_PLAIN_TOKEN=yes` on the controller."
+    }
   }
 }
