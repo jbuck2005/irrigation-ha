@@ -71,6 +71,112 @@
       }
     }
   },
+  "config_subentries": {
+    "program": {
+      "initiate_flow": {
+        "user": "Add program"
+      },
+      "entry_type": "Program",
+      "step": {
+        "user": {
+          "title": "Add a watering program",
+          "data": {
+            "name": "Name",
+            "start_1": "Start time 1",
+            "start_2": "Start time 2",
+            "start_3": "Start time 3",
+            "start_4": "Start time 4",
+            "days": "Days",
+            "weekdays": "Weekdays",
+            "interval": "Every how many days",
+            "zone_1_minutes": "Zone 1 run time",
+            "zone_2_minutes": "Zone 2 run time",
+            "zone_3_minutes": "Zone 3 run time",
+            "zone_4_minutes": "Zone 4 run time",
+            "zone_5_minutes": "Zone 5 run time",
+            "zone_6_minutes": "Zone 6 run time",
+            "zone_7_minutes": "Zone 7 run time",
+            "zone_8_minutes": "Zone 8 run time",
+            "zone_9_minutes": "Zone 9 run time",
+            "zone_10_minutes": "Zone 10 run time",
+            "zone_11_minutes": "Zone 11 run time",
+            "zone_12_minutes": "Zone 12 run time",
+            "zone_13_minutes": "Zone 13 run time",
+            "zone_14_minutes": "Zone 14 run time"
+          },
+          "data_description": {
+            "start_1": "Leave a start time blank to skip it. Up to four starts a day.",
+            "weekdays": "Used when Days is set to chosen weekdays.",
+            "interval": "Used when Days is set to every few days. Counts from the day you save it.",
+            "zone_1_minutes": "Zones run one at a time, in zone order. 0 skips a zone."
+          }
+        },
+        "reconfigure": {
+          "title": "Edit program",
+          "data": {
+            "start_1": "Start time 1",
+            "start_2": "Start time 2",
+            "start_3": "Start time 3",
+            "start_4": "Start time 4",
+            "days": "Days",
+            "weekdays": "Weekdays",
+            "interval": "Every how many days",
+            "zone_1_minutes": "Zone 1 run time",
+            "zone_2_minutes": "Zone 2 run time",
+            "zone_3_minutes": "Zone 3 run time",
+            "zone_4_minutes": "Zone 4 run time",
+            "zone_5_minutes": "Zone 5 run time",
+            "zone_6_minutes": "Zone 6 run time",
+            "zone_7_minutes": "Zone 7 run time",
+            "zone_8_minutes": "Zone 8 run time",
+            "zone_9_minutes": "Zone 9 run time",
+            "zone_10_minutes": "Zone 10 run time",
+            "zone_11_minutes": "Zone 11 run time",
+            "zone_12_minutes": "Zone 12 run time",
+            "zone_13_minutes": "Zone 13 run time",
+            "zone_14_minutes": "Zone 14 run time"
+          },
+          "data_description": {
+            "start_1": "Leave a start time blank to skip it. Up to four starts a day.",
+            "weekdays": "Used when Days is set to chosen weekdays.",
+            "interval": "Used when Days is set to every few days. Counts from the day you save it.",
+            "zone_1_minutes": "Zones run one at a time, in zone order. 0 skips a zone."
+          }
+        }
+      },
+      "error": {
+        "no_start_time": "Add at least one start time.",
+        "no_zones": "Give at least one zone a run time.",
+        "no_weekdays": "Pick at least one weekday.",
+        "no_name": "Give the program a name."
+      },
+      "abort": {
+        "reconfigure_successful": "The program was saved."
+      }
+    }
+  },
+  "selector": {
+    "days": {
+      "options": {
+        "every_day": "Every day",
+        "weekdays": "Chosen weekdays",
+        "interval": "Every few days",
+        "odd": "Odd dates",
+        "even": "Even dates"
+      }
+    },
+    "weekdays": {
+      "options": {
+        "mon": "Monday",
+        "tue": "Tuesday",
+        "wed": "Wednesday",
+        "thu": "Thursday",
+        "fri": "Friday",
+        "sat": "Saturday",
+        "sun": "Sunday"
+      }
+    }
+  },
   "issues": {
     "plain_token": {
       "title": "{name}: the irrigationd token is sent in plain text",

@@ -40,3 +40,22 @@ def entity_id_prefix(entry) -> str:
     """Return the entity ID prefix: irrigation, then irrigation_2 and so on."""
     number = entry.data.get(CONF_CONTROLLER_NUMBER, 1)
     return "irrigation" if number == 1 else f"irrigation_{number}"
+
+
+def program_device_info(entry, subentry) -> dict:
+    """Return the device for one program, listed under its controller."""
+    return {
+        "identifiers": {(DOMAIN, f"{entry.entry_id}_{subentry.subentry_id}")},
+        "name": subentry.title,
+        "manufacturer": "Custom",
+        "model": "Irrigation Program",
+        "via_device": (DOMAIN, entry.entry_id),
+    }
+
+
+def program_entity_id(entry, subentry, domain: str, suffix: str) -> str:
+    """Suggest an entity ID such as switch.irrigation_program_morning_lawns."""
+    from homeassistant.util import slugify
+
+    name = slugify(subentry.title) or subentry.subentry_id.lower()
+    return f"{domain}.{entity_id_prefix(entry)}_program_{name}{suffix}"

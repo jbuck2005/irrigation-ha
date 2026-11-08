@@ -29,6 +29,8 @@ class QueuedRun:
 
     zone: int
     seconds: int
+    # The program subentry that queued it, or None for a manual start
+    program: str | None = None
 
 
 class RunQueue:
@@ -88,20 +90,25 @@ class RunQueue:
 
     # -- commands ----------------------------------------------------------
 
-    async def async_enqueue(self, zone: int, seconds: int) -> None:
+    def runs(self):
+        """Return the running zone, if any, and every waiting one."""
+        return ([self.current] if self.current else []) + list(self.waiting)
+
+    async def async_enqueue(self, zone: int, seconds: int, program: str | None = None) -> None:
         """Run `zone` for `seconds` now if idle, otherwise after the zones ahead of it."""
         if zone == self.master_zone:
             raise HomeAssistantError(
                 f"Zone {zone} is the master valve, so it opens with the other zones"
             )
         self._valve(zone)
-        run = QueuedRun(zone, seconds)
+        run = QueuedRun(zone, seconds, program)
         # One action on several zones calls this for each at the same time, so
         # the idle check and the first zone's start must happen as one step
         async with self._lock:
             if self._task is not None:
-                # A newer start for a waiting zone replaces the older one
-                self.remove(zone)
+                # A newer manual start for a waiting zone replaces the older one
+                if program is None:
+                    self.remove(zone, manual_only=True)
                 self.waiting.append(run)
                 self._changed()
                 return
@@ -113,10 +120,14 @@ class RunQueue:
                 self._worker(run), f"irrigation run queue {self._entry_id}"
             )
 
-    def remove(self, zone: int) -> bool:
-        """Drop a waiting run of `zone`; return true if there was one."""
+    def remove(self, zone: int, manual_only: bool = False) -> bool:
+        """Drop waiting runs of `zone`; return true if there were any."""
         before = len(self.waiting)
-        self.waiting = deque(run for run in self.waiting if run.zone != zone)
+        self.waiting = deque(
+            run
+            for run in self.waiting
+            if run.zone != zone or (manual_only and run.program is not None)
+        )
         if len(self.waiting) != before:
             self._changed()
             return True

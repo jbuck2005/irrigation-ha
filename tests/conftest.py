@@ -3,6 +3,7 @@
 from unittest.mock import patch
 
 import pytest
+from homeassistant.config_entries import ConfigEntryState
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.irrigation.const import DOMAIN
@@ -33,7 +34,7 @@ def auto_enable_custom_integrations(enable_custom_integrations):
 
 
 @pytest.fixture
-def daemon():
+async def daemon(hass):
     """Replace the TCP connection to irrigationd with a fake daemon."""
     fake = FakeIrrigationd(token=TOKEN)
 
@@ -50,6 +51,12 @@ def daemon():
         patch("custom_components.irrigation.status.send_tls_command", side_effect=send_tls),
     ):
         yield fake
+        # Unload while the fake is still in place: unloading closes zones, and
+        # without the fake that would try a real connection and wait for it to fail
+        for entry in hass.config_entries.async_entries(DOMAIN):
+            if entry.state is ConfigEntryState.LOADED:
+                await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()
 
 
 @pytest.fixture

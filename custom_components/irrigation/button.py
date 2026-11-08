@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from homeassistant.components.button import ButtonEntity
 
-from .const import DOMAIN, device_info, entity_id_prefix
+from .const import DOMAIN, device_info, entity_id_prefix, program_device_info, program_entity_id
 
 
 class _QueueButton(ButtonEntity):
@@ -37,7 +37,30 @@ class SkipButton(_QueueButton):
         self._queue.skip()
 
 
+class RunProgramButton(ButtonEntity):
+    """Run a program now, whether or not its schedule is on."""
+
+    _attr_icon = "mdi:play-circle-outline"
+
+    def __init__(self, entry, subentry, scheduler):
+        self._entry = entry
+        self._subentry_id = subentry.subentry_id
+        self._scheduler = scheduler
+        self.entity_id = program_entity_id(entry, subentry, "button", "_run_now")
+        self._attr_unique_id = f"{entry.entry_id}_{subentry.subentry_id}_run_now"
+        self._attr_name = f"{subentry.title} Run Now"
+        self._attr_device_info = program_device_info(entry, subentry)
+
+    async def async_press(self) -> None:
+        await self._scheduler.async_run(self._entry.subentries[self._subentry_id])
+
+
 async def async_setup_entry(hass, entry, async_add_entities):
-    """Set up the run queue buttons."""
+    """Set up the run queue buttons and each program's Run now."""
     queue = hass.data[DOMAIN][entry.entry_id]["queue"]
+    scheduler = hass.data[DOMAIN][entry.entry_id]["scheduler"]
     async_add_entities([StopAllButton(entry, queue), SkipButton(entry, queue)])
+    for subentry in scheduler.programs():
+        async_add_entities(
+            [RunProgramButton(entry, subentry, scheduler)], config_subentry_id=subentry.subentry_id
+        )
