@@ -368,8 +368,10 @@ class ZoneRow {
     const state = this.state;
     const unavailable = !state || state.state === "unavailable";
     const running = state?.state === "open";
+    const queued = !running && Boolean(state?.attributes.queued);
+    const master = Boolean(state?.attributes.master);
     const remaining = Number(state?.attributes.remaining) || 0;
-    const total = Number(state?.attributes.configured_duration) || 0;
+    const total = Number(state?.attributes.run_duration ?? state?.attributes.configured_duration) || 0;
     const duration = this.pendingDuration ?? this.savedDuration;
     const label = zoneLabel(state, this.zone);
 
@@ -378,7 +380,9 @@ class ZoneRow {
     this.name.title = label;
     if (unavailable) this.status.textContent = "Unavailable";
     else if (this.busyText) this.status.textContent = this.busyText;
-    else this.status.textContent = running ? `${formatTime(remaining)} left` : "Idle";
+    else if (running) this.status.textContent = `${formatTime(remaining)} left`;
+    else if (queued) this.status.textContent = "Waiting its turn";
+    else this.status.textContent = master ? "Master valve" : "Idle";
 
     const done = running && total ? ((total - remaining) / total) * 100 : 0;
     this.fill.style.width = `${Math.min(100, Math.max(0, done))}%`;
@@ -390,9 +394,11 @@ class ZoneRow {
     this.minus.setAttribute("aria-label", `Shorter run time for ${label}`);
     this.plus.setAttribute("aria-label", `Longer run time for ${label}`);
 
-    this.action.textContent = running ? "Stop" : "Start";
-    this.action.setAttribute("aria-label", `${running ? "Stop" : "Start"} ${label}`);
-    this.action.disabled = unavailable || Boolean(this.busyText);
+    const verb = running ? "Stop" : queued ? "Cancel" : "Start";
+    this.action.textContent = verb;
+    this.action.setAttribute("aria-label", `${verb} ${label}`);
+    // The master valve opens with the other zones, so it has no Start of its own
+    this.action.disabled = unavailable || Boolean(this.busyText) || (master && !running);
 
     const message = unavailable
       ? "Can't reach irrigationd, so this zone's state is unknown. A running zone still closes when its time ends."
@@ -426,7 +432,7 @@ class ZoneRow {
   }
 
   async toggle() {
-    const start = this.state?.state !== "open";
+    const start = this.state?.state !== "open" && !this.state?.attributes.queued;
     // A changed run time has to be saved before the zone starts with it
     if (start && this.pendingDuration !== null) {
       clearTimeout(this.saveTimer);
@@ -447,7 +453,9 @@ class ZoneRow {
         entity_id: this.zone.valveId,
       });
       await new Promise((resolve) => setTimeout(resolve, CHECK_DELAY_MS));
-      if ((this.state?.state === "open") !== start) {
+      // A start counts once the zone is open or waiting its turn in the queue
+      const active = this.state?.state === "open" || Boolean(this.state?.attributes.queued);
+      if (active !== start) {
         this.errorText = failureText(start);
       }
     } catch (err) {
@@ -535,9 +543,10 @@ class IrrigationPanel extends HTMLElement {
       this.dispatchEvent(new Event("hass-toggle-menu", { bubbles: true, composed: true }));
     });
     this.stopAll.addEventListener("click", () => {
-      for (const row of this.list.rowList) {
-        if (row.state?.state === "open") row.send(false);
-      }
+      // Closing zones one by one would start the next queued zone, so stop the queues
+      this.hass.callService("irrigation", "stop_all", {}).catch((err) => {
+        console.error("Irrigation: Stop all failed", err);
+      });
     });
   }
 
@@ -545,7 +554,9 @@ class IrrigationPanel extends HTMLElement {
     this._hass = hass;
     this.toggleAttribute("dark", Boolean(hass.themes?.darkMode));
     this.list.update();
-    this.stopAll.hidden = !this.list.rowList.some((row) => row.state?.state === "open");
+    this.stopAll.hidden = !this.list.rowList.some(
+      (row) => row.state?.state === "open" || row.state?.attributes.queued
+    );
   }
 
   get hass() {

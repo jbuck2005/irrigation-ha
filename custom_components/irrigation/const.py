@@ -10,6 +10,9 @@ CONF_ZONES = "zones"
 CONF_DEFAULT_DURATION = "default_duration"
 CONF_ZONE_DURATIONS = "zone_durations"
 CONF_CONTROLLER_NUMBER = "controller_number"
+CONF_MASTER_ZONE = "master_zone"
+CONF_MASTER_SWITCH = "master_switch"
+CONF_MASTER_LEAD = "master_lead"
 # Set once irrigationd has answered over TLS: never send the token in plain text again
 CONF_TLS = "tls"
 
@@ -17,6 +20,7 @@ CONF_TLS = "tls"
 DEFAULT_PORT = 4242
 DEFAULT_ZONES = 4
 DEFAULT_DURATION = 300
+MAX_MASTER_LEAD = 10
 
 # irrigationd drives at most this many zones
 MAX_ZONES = 14

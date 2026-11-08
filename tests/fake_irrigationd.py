@@ -30,6 +30,8 @@ class FakeIrrigationd:
         self.plain_allowed = True
         # Set to make the next replies fail: an exception to raise, or a reply string
         self.fail_with = None
+        # Zones whose start commands are refused, like a zone at its maximum runtime
+        self.refuse = set()
 
     def run(self, zone, seconds):
         """Start or stop a zone as if someone else had done it."""
@@ -77,7 +79,13 @@ class FakeIrrigationd:
                 return "ERR invalid zone"
             if seconds > MAX_TIME:
                 return "ERR invalid time"
+            if seconds and zone in self.refuse:
+                return "ERR zone at maximum runtime"
             self.zones[zone] = seconds
             return "OK"
 
         return "ERR invalid command"
+
+    def sent(self, prefix="ZONE="):
+        """Return the zone commands sent so far, without the token."""
+        return [c.rsplit(" TOKEN=", 1)[0] for c in self.commands if c.startswith(prefix)]
