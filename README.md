@@ -24,7 +24,7 @@ Provides:
 - Sprinkler icons that change while a zone is running
 
 <p align="center">
-  <img src="docs/screenshots/panel.png" alt="The Irrigation sidebar panel with one zone running and counting down, two idle zones with Start buttons, and a Stop all button" width="100%">
+  <img src="docs/screenshots/panel.png" alt="The Irrigation sidebar panel with one zone running and counting down, a second zone waiting its turn with a Cancel button, an idle zone with a Start button, and a Stop all button" width="100%">
 </p>
 
 ### Requirements
