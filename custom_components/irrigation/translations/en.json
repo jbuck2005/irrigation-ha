@@ -13,6 +13,10 @@
           "token": "Token"
         }
       }
+    },
+    "error": {
+      "invalid_host": "The host can't contain spaces or control characters.",
+      "invalid_token": "The token can't contain spaces or control characters."
     }
   },
   "options": {
@@ -44,6 +48,10 @@
           "token": "Leave blank to keep the current token."
         }
       }
+    },
+    "error": {
+      "invalid_host": "The host can't contain spaces or control characters.",
+      "invalid_token": "The token can't contain spaces or control characters."
     }
   }
 }

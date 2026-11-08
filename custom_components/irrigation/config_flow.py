@@ -1,4 +1,6 @@
 """Config flow for Irrigation integration."""
+import re
+
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import callback
@@ -22,8 +24,24 @@ from .const import (
 
 # irrigationd refuses commands without its token, so an empty one can never work.
 TOKEN_SCHEMA = vol.All(str, vol.Length(min=1))
+HOST_SCHEMA = vol.All(str, vol.Length(min=1))
+PORT_SCHEMA = vol.All(int, vol.Range(min=1, max=65535))
 ZONES_SCHEMA = vol.All(int, vol.Range(min=1, max=MAX_ZONES))
+# 0 is irrigationd's stop command and it refuses more than 2 hours
 DURATION_SCHEMA = vol.All(int, vol.Range(min=10, max=7200))
+# Commands are one line of space-separated fields, so a space, tab or newline
+# in the token or host would split the command or start a second one.
+UNSAFE_CHARS = re.compile(r"[\s\x00-\x1f\x7f]")
+
+
+def check_fields(user_input) -> dict:
+    """Return form errors for a host or token that would break the command line."""
+    errors = {}
+    if UNSAFE_CHARS.search(user_input.get(CONF_HOST, "")):
+        errors[CONF_HOST] = "invalid_host"
+    if UNSAFE_CHARS.search(user_input.get(CONF_TOKEN) or ""):
+        errors[CONF_TOKEN] = "invalid_token"
+    return errors
 # Hidden, so the stored token never reaches the browser
 PASSWORD = TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD))
 
@@ -43,6 +61,8 @@ class IrrigationConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Handle the initial step where the user provides connection details."""
         errors = {}
         if user_input is not None:
+            errors = check_fields(user_input)
+        if user_input is not None and not errors:
             # Initialize zone_durations dictionary with default duration for each zone
             num_zones = int(user_input.get(CONF_ZONES, DEFAULT_ZONES))
             default_duration = int(user_input.get(CONF_DEFAULT_DURATION, DEFAULT_DURATION))
@@ -72,10 +92,10 @@ class IrrigationConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         schema = vol.Schema(
             {
                 vol.Optional(CONF_NAME, default="Irrigation Controller"): str,
-                vol.Required(CONF_HOST): str,
-                vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
+                vol.Required(CONF_HOST): HOST_SCHEMA,
+                vol.Required(CONF_PORT, default=DEFAULT_PORT): PORT_SCHEMA,
                 vol.Required(CONF_ZONES, default=DEFAULT_ZONES): ZONES_SCHEMA,
-                vol.Required(CONF_DEFAULT_DURATION, default=DEFAULT_DURATION): int,
+                vol.Required(CONF_DEFAULT_DURATION, default=DEFAULT_DURATION): DURATION_SCHEMA,
                 vol.Required(CONF_TOKEN): vol.All(PASSWORD, TOKEN_SCHEMA),
             }
         )
@@ -93,7 +113,10 @@ class IrrigationOptionsFlowHandler(config_entries.OptionsFlow):
 
     async def async_step_init(self, user_input=None):
         """Manage the options."""
+        errors = {}
         if user_input is not None:
+            errors = check_fields(user_input)
+        if user_input is not None and not errors:
             # Extract zone-specific durations from user_input
             num_zones = user_input.get(CONF_ZONES, self._entry.data.get(CONF_ZONES, DEFAULT_ZONES))
             zone_durations = {}
@@ -129,10 +152,10 @@ class IrrigationOptionsFlowHandler(config_entries.OptionsFlow):
         
         # Create schema with per-zone duration fields
         schema_dict = {
-            vol.Required(CONF_HOST, default=data.get("host", "127.0.0.1")): str,
-            vol.Required(CONF_PORT, default=data.get("port", DEFAULT_PORT)): int,
+            vol.Required(CONF_HOST, default=data.get("host", "127.0.0.1")): HOST_SCHEMA,
+            vol.Required(CONF_PORT, default=data.get("port", DEFAULT_PORT)): PORT_SCHEMA,
             vol.Required(CONF_ZONES, default=num_zones): ZONES_SCHEMA,
-            vol.Required(CONF_DEFAULT_DURATION, default=data.get(CONF_DEFAULT_DURATION, DEFAULT_DURATION)): int,
+            vol.Required(CONF_DEFAULT_DURATION, default=data.get(CONF_DEFAULT_DURATION, DEFAULT_DURATION)): DURATION_SCHEMA,
             vol.Optional(CONF_TOKEN): PASSWORD,
         }
         
@@ -143,4 +166,4 @@ class IrrigationOptionsFlowHandler(config_entries.OptionsFlow):
             schema_dict[vol.Optional(f"zone_{zone}_duration", default=default_val)] = DURATION_SCHEMA
         
         schema = vol.Schema(schema_dict)
-        return self.async_show_form(step_id="init", data_schema=schema)
+        return self.async_show_form(step_id="init", data_schema=schema, errors=errors)
