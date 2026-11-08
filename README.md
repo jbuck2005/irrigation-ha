@@ -20,6 +20,10 @@ Provides:
 - A bundled automation blueprint for watering zones one after another
 - Sprinkler icons that change while a zone is running
 
+<p align="center">
+  <img src="docs/screenshots/panel.png" alt="The Irrigation sidebar panel with one zone running and counting down, two idle zones with Start buttons, and a Stop all button" width="100%">
+</p>
+
 ### Requirements
 - Home Assistant 2024.7 or later
 - [`irrigationd`](https://github.com/jbuck2005/irrigationd) running and reachable from Home Assistant, with a token set and the `STATUS` command, which Home Assistant uses to read zone state
@@ -68,6 +72,10 @@ You will be asked for:
 
 These can be changed later under **Configure**, including the token. Leave the token blank to keep the current one.
 
+<p align="center">
+  <img src="docs/screenshots/integration.png" alt="The Irrigation Controller integration page with one controller, and its Configure button" width="80%">
+</p>
+
 ### Configuring Individual Zone Durations
 
 After initial setup, you can configure each zone's default duration in two ways:
@@ -78,12 +86,22 @@ After initial setup, you can configure each zone's default duration in two ways:
 3. You'll see `number.irrigation_zone_X_default_duration` entities for each zone
 4. Adjust each zone's duration as needed (10 - 7200 seconds)
 
+<p align="center">
+  <img src="docs/screenshots/device.png" alt="The controller's device page, with a valve for each zone under Controls and a default run time for each zone under Configuration" width="60%">
+</p>
+
 #### Option 2: Configure (Bulk Edit)
 1. Go to **Settings → Devices & Services → Irrigation Controller**
 2. Click **Configure**
 3. You'll see individual run time fields for each zone, from 10 to 7200 seconds
 4. Adjust all zones at once and click **Submit**
 5. The integration will reload automatically with new settings
+
+If you change **Number of zones**, submit, then open **Configure** again to set run times for the new zones. Until you do, they use the default run time.
+
+<p align="center">
+  <img src="docs/screenshots/configure.png" alt="The Configure dialog with host, port, number of zones, default run time, a hidden token field and a run time for each zone" width="45%">
+</p>
 
 ### Changing the token
 
@@ -136,7 +154,7 @@ A second controller adds its number after `irrigation`, such as `valve.irrigatio
 If `irrigationd` refuses a command, the action fails with its reply, which stops an automation at that step. Add `continue_on_error: true` to a step that should carry on regardless. The blueprint already does this.
 
 ### Number Entities
-- `number.irrigation_zone_X_default_duration` → Configure default run time for each zone individually
+- `number.irrigation_zone_X_default_duration` → Configure default run time for each zone individually. A second controller's are named like `number.irrigation_2_zone_1_default_duration`
 - Adjustable from 10 seconds to 2 hours (7200 seconds)
 - Changes apply to the next run
 - Persisted across Home Assistant restarts
@@ -196,6 +214,10 @@ It runs zones one after another at a scheduled time. To import it, go to **Setti
 
 Then create an automation from **Irrigation Cycle**.
 
+<p align="center">
+  <img src="docs/screenshots/blueprint.png" alt="An automation made from the Irrigation Cycle blueprint, starting at 6:00 AM and running three zones in order for 300, 600 and 300 seconds" width="70%">
+</p>
+
 ### Example setup
 
 - Start Time: `06:00:00`
@@ -207,7 +229,9 @@ This will:
 2. Run Zone 2 for 600s
 3. Run Zone 3 for 300s
 
-Durations are comma-separated, in the same order as the zones. A zone with no duration runs for 300 seconds. If a zone is refused, the cycle moves on to the next one.
+Durations are comma-separated, in the same order as the zones, without brackets. A zone with no duration runs for 300 seconds. If a zone is refused, the cycle moves on to the next one.
+
+Pick the zone valves one by one. Choosing an area or a device in the zone picker runs nothing.
 
 ### YAML snippet
 
@@ -226,11 +250,32 @@ use_blueprint:
 
 ---
 
-## Notes
+## Updating and removing
 
-- The integration sends commands straight to `irrigationd` over TCP.
+- **Update** from HACS or the Marketplace, then restart Home Assistant. If the panel still looks old, refresh the browser.
+- **Remove** a controller under **Settings → Devices & Services → Irrigation Controller**. Removing the last one also removes the **Irrigation** sidebar panel. Then uninstall it from HACS or the Marketplace.
+
+---
+
+## Troubleshooting
+
+- **Commands fail with `ERR token`**: the token in Home Assistant doesn't match `IRRIGATIOND_TOKEN` on the irrigationd host. See [Changing the token](#changing-the-token).
+- **Zones show as unavailable**: Home Assistant couldn't read zone state from `irrigationd` for 45 seconds. Check that `irrigationd` is running, and that the host and port under **Configure** are right.
+- **A stopped zone shows a warning in the panel**: the stop command failed, so the valve may still be open. Check the controller.
+- **A zone won't restart**: it reached the 2-hour limit and can't run again for up to 10 minutes unless it's stopped first.
+
+Logs are under **Settings → System → Logs**. The token is never written to them. Remove host names and addresses before sharing logs.
+
+---
+
+## Security and privacy
+
+- Everything stays on your local network. The integration talks only to `irrigationd`, and sends nothing to the internet.
+- Commands, including the token, go to `irrigationd` as plain text over TCP. Keep `irrigationd` reachable only from your local network, never from the internet.
+- Home Assistant stores the token in its configuration, like other integrations' credentials. The token field is hidden in the UI and never sent back to the browser.
 - `irrigationd` limits failed token attempts. Set `IRRIGATIOND_TRUSTED_ADDR` on the irrigationd host to Home Assistant's address, so a flood of bad attempts can't block its commands.
-- Logs can be checked via `Settings → System → Logs`. The token is never written to them.
+
+To report a security problem, see the [security policy](SECURITY.md).
 
 ---
 

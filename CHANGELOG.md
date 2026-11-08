@@ -1,7 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- README: screenshots, troubleshooting, updating/removing and security sections; blueprint durations hint fixed
+
 ## 1.2.1 - 2026-11-08
-Initial release.
+First public release. Earlier versions were private and aren't listed here.
 
 - An **Irrigation** sidebar panel and an **Irrigation Zones** dashboard card for starting and stopping zones, with the time left and a **Stop all** button
 - A `valve` entity for each zone, such as `valve.irrigation_zone_1`, grouped under a device named after the controller
