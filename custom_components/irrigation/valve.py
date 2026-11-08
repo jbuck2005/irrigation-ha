@@ -106,9 +106,14 @@ class IrrigationZoneValve(ValveEntity):
     @property
     def extra_state_attributes(self):
         """Return extra attributes including remaining time and configured duration."""
+        queue = self.hass.data[DOMAIN][self._entry_id].get("queue")
         return {
             "remaining": self._remaining,
-            "configured_duration": self._duration,
+            # The zone's default run time, and the length of the current or last run
+            "configured_duration": self._default_duration,
+            "run_duration": self._duration,
+            "queued": queue is not None and any(run.zone == self._zone for run in queue.waiting),
+            "master": queue is not None and queue.master_zone == self._zone,
         }
 
     def _build_command(self, zone: int, seconds: int) -> str:
@@ -128,14 +133,32 @@ class IrrigationZoneValve(ValveEntity):
             )
             return safe_reply(f"ERR {e}")
 
+    @property
+    def _queue(self):
+        return self.hass.data[DOMAIN][self._entry_id]["queue"]
+
     async def async_open_valve(self, **kwargs):
-        """Open the valve for the zone's default duration."""
+        """Run the zone for its default duration, after any zones already running."""
         await self.async_run()
 
     async def async_run(self, duration=None):
-        """Run the zone for a duration (default or specified)."""
+        """Run the zone for a duration (default or specified), through the run queue."""
         if duration is None:
             duration = self._default_duration
+        await self._queue.async_enqueue(self._zone, duration)
+
+    async def async_close_valve(self, **kwargs):
+        """Close the valve now. If it was running from the queue, the next zone starts."""
+        queue = self._queue
+        queue.remove(self._zone)
+        if queue.current is not None and queue.current.zone == self._zone:
+            await self.async_send_stop()
+            queue.skip()
+            return
+        await self.async_send_stop()
+
+    async def async_send_run(self, duration):
+        """Tell irrigationd to run this zone now. Only the run queue calls this."""
         command = self._build_command(self._zone, duration)
         response = await self.hass.async_add_executor_job(self._send_command, command)
         self._last_command = time.monotonic()
@@ -147,8 +170,8 @@ class IrrigationZoneValve(ValveEntity):
         else:
             raise HomeAssistantError(f"Zone {self._zone} didn't start: {safe_reply(response)}")
 
-    async def async_close_valve(self, **kwargs):
-        """Close the valve immediately."""
+    async def async_send_stop(self):
+        """Tell irrigationd to close this zone now."""
         command = self._build_command(self._zone, 0)
         response = await self.hass.async_add_executor_job(self._send_command, command)
         self._last_command = time.monotonic()
