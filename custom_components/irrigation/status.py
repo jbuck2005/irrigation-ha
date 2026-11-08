@@ -12,7 +12,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import issue_registry as ir
 
-from .const import CONF_TLS, DEFAULT_PORT, DOMAIN
+from .const import CONF_ALLOW_PLAIN, CONF_TLS, DEFAULT_PORT, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -152,6 +152,11 @@ class IrrigationdClient:
     def _tls_confirmed(self) -> bool:
         return bool(self._entry.data.get(CONF_TLS))
 
+    @property
+    def _plain_allowed(self) -> bool:
+        """Whether the token may go in plain text, to an irrigationd without TLS."""
+        return not self._tls_confirmed and bool(self._entry.data.get(CONF_ALLOW_PLAIN, True))
+
     def _send(self, command: str) -> tuple[str, bool]:
         """Send a command without its token, and return (reply, whether TLS was used)."""
         if TLS_SUPPORTED and (self._tls_confirmed or time.monotonic() >= self._plain_until):
@@ -163,11 +168,21 @@ class IrrigationdClient:
                         "irrigationd answered without TLS, though it used TLS before, "
                         "so the token was not sent"
                     ) from None
+                if not self._plain_allowed:
+                    raise NotTlsError(
+                        "irrigationd answered without TLS, and plain text is turned off for this "
+                        "controller, so the token was not sent"
+                    ) from None
                 self._plain_until = time.monotonic() + TLS_RETRY_INTERVAL
         elif self._tls_confirmed:
             raise OSError(
                 "This Home Assistant can't use TLS, and irrigationd used it before, "
                 "so the token was not sent"
+            )
+        elif not self._plain_allowed:
+            raise OSError(
+                "This Home Assistant can't use TLS, and plain text is turned off for this "
+                "controller, so the token was not sent"
             )
         return send_command(self._host, self._port, f"{command} TOKEN={self._token}"), False
 

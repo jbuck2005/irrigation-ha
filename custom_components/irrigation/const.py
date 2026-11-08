@@ -15,6 +15,12 @@ CONF_MASTER_SWITCH = "master_switch"
 CONF_MASTER_LEAD = "master_lead"
 # Set once irrigationd has answered over TLS: never send the token in plain text again
 CONF_TLS = "tls"
+# Whether the token may be sent in plain text to an irrigationd too old for TLS.
+# Off for new controllers. An entry from before this option has no value, which
+# counts as on unless TLS has already worked (and then plain text never happens).
+CONF_ALLOW_PLAIN = "allow_plain_token"
+# Shortest token accepted when one is typed in. irrigationd generates 32 characters.
+MIN_TOKEN_LENGTH = 16
 
 # Defaults
 DEFAULT_PORT = 4242

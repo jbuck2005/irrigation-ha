@@ -98,9 +98,9 @@ async def test_options_new_token_replaces_it(hass, loaded):
     result = await hass.config_entries.options.async_init(loaded.entry_id)
     await hass.config_entries.options.async_configure(
         result["flow_id"],
-        {"host": HOST, "port": PORT, "zones": 4, "default_duration": 300, "token": "new-token"},
+        {"host": HOST, "port": PORT, "zones": 4, "default_duration": 300, "token": "new-token-0123456789abcdef"},
     )
-    assert loaded.data["token"] == "new-token"
+    assert loaded.data["token"] == "new-token-0123456789abcdef"
 
 
 async def test_options_rejects_unsafe_token(hass, loaded):
@@ -149,3 +149,20 @@ async def test_options_sets_master_valve(hass, loaded, daemon):
     assert loaded.data["master_lead"] == 2
     assert loaded.data["master_switch"] is None
     assert hass.data[DOMAIN][loaded.entry_id]["queue"].master_zone == 4
+
+
+async def test_short_token_is_refused(hass, daemon):
+    """A newly typed token must be long enough that it can't be guessed offline."""
+    result = await start_user_flow(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {**USER_INPUT, "token": "short-token"}
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"token": "token_too_short"}
+
+
+async def test_new_controller_doesnt_allow_plain_text(hass, daemon):
+    """Plain text is off for a new controller unless it's turned on."""
+    result = await start_user_flow(hass)
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], USER_INPUT)
+    assert result["data"]["allow_plain_token"] is False

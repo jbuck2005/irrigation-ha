@@ -263,10 +263,50 @@ async def test_options_host_change_forgets_tls(hass, daemon):
 
     result = await hass.config_entries.options.async_init(entry.entry_id)
     with patch.object(hass.config_entries, "async_reload"):
-        await hass.config_entries.options.async_configure(result["flow_id"], {**form, "token": "new-token"})
+        await hass.config_entries.options.async_configure(result["flow_id"], {**form, "token": "new-token-0123456789abcdef"})
     assert entry.data[CONF_TLS] is True
 
     result = await hass.config_entries.options.async_init(entry.entry_id)
     with patch.object(hass.config_entries, "async_reload"):
         await hass.config_entries.options.async_configure(result["flow_id"], {**form, "host": "192.0.2.11"})
     assert CONF_TLS not in entry.data
+
+
+async def test_plain_text_off_never_sends_the_token(hass, daemon):
+    """With plain text turned off, an irrigationd without TLS gets nothing."""
+    daemon.tls = False
+    entry = await setup(hass, daemon, allow_plain_token=False)
+    assert daemon.commands == []
+    assert hass.states.get("valve.irrigation_zone_1").state == "closed"
+    with pytest.raises(HomeAssistantError, match="didn't start"):
+        await hass.services.async_call(
+            "valve", "open_valve", {"entity_id": "valve.irrigation_zone_1"}, blocking=True
+        )
+    assert daemon.commands == []
+    assert daemon.transports.count("plain") == 0
+    assert CONF_TLS not in entry.data
+
+
+async def test_plain_text_off_still_uses_tls(hass, daemon):
+    """Turning plain text off doesn't stop TLS from working."""
+    entry = await setup(hass, daemon, allow_plain_token=False)
+    assert daemon.transports == ["tls"]
+    assert entry.data[CONF_TLS] is True
+
+
+def short_token_issue(hass, entry):
+    return ir.async_get(hass).async_get_issue(DOMAIN, f"short_token_{entry.entry_id}")
+
+
+async def test_short_stored_token_keeps_working_with_a_notice(hass, daemon):
+    """A short token from before the minimum still works, and Repairs says so."""
+    daemon.token = "short"
+    entry = await setup(hass, daemon, token="short")
+    assert entry.data["token"] == "short"
+    assert daemon.transports == ["tls"]
+    assert short_token_issue(hass, entry) is not None
+
+
+async def test_long_token_has_no_notice(hass, daemon):
+    entry = await setup(hass, daemon)
+    assert short_token_issue(hass, entry) is None
