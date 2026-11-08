@@ -6,16 +6,26 @@ on:
       - main
   pull_request:
 
+# The checks only read the repo.
+permissions:
+  contents: read
+
 jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # Actions are pinned to a commit so an upstream change can't run here
+      # until it's reviewed. Dependabot proposes updates.
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
 
       - name: Validate with hassfest
-        uses: home-assistant/actions/hassfest@master
+        uses: home-assistant/actions/hassfest@86d4564712fa02543c808e3a693dd04f9d3f8361 # master, 2026-11-08
 
+      # The HACS action runs a Docker image tagged :main, so this pin fixes
+      # the action definition but not the image it pulls.
       - name: HACS validation
-        uses: hacs/action@main
+        uses: hacs/action@1ebf01c408f29afcb6406bd431bc98fd8cbb15aa # main, 2026-11-08
         with:
           category: integration
