@@ -99,6 +99,8 @@ class Scheduler:
         self.entry = entry
         self.queue = queue
         self._listeners: list[Callable[[], None]] = []
+        # Programs being queued right now, so a second tap can't slip in before the first zone is queued
+        self._starting: set[str] = set()
 
     def programs(self) -> list[ConfigSubentry]:
         """Return the controller's program subentries."""
@@ -156,9 +158,18 @@ class Scheduler:
 
     async def async_run(self, sub: ConfigSubentry) -> None:
         """Queue every zone of the program now, whatever its schedule."""
+        if sub.subentry_id in self._starting or self.is_running(sub.subentry_id):
+            raise HomeAssistantError(f"The program {sub.title} is already running")
         runs = zone_runs(sub.data, self.queue.master_zone)
         if not runs:
             raise HomeAssistantError(f"The program {sub.title} has no zones with a run time")
+        self._starting.add(sub.subentry_id)
+        try:
+            await self._async_queue_runs(sub, runs)
+        finally:
+            self._starting.discard(sub.subentry_id)
+
+    async def _async_queue_runs(self, sub: ConfigSubentry, runs: list[tuple[int, int]]) -> None:
         self._update(sub, running_since=dt_util.utcnow().isoformat(), last_run=dt_util.utcnow().isoformat())
         started = 0
         for zone, seconds in runs:

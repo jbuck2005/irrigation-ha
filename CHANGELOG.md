@@ -18,7 +18,7 @@
 - Reloading a controller, such as after saving **Configure**, now closes its zones
 - The valve's `configured_duration` attribute is now the zone's default run time; the length of the current or last run is in `run_duration`
 - **Programs.** Add them with **Add program** on the controller's integration page. Each has up to four start times a day, runs every day, on chosen weekdays, every few days, or on odd or even dates, and waters its zones in order through the run queue
-- Each program is a device with a schedule switch, a **Run now** button, and next and last run sensors. `irrigation.run_program` runs one now
+- Each program is a device with a schedule switch, a **Run now** button, and next and last run sensors. `irrigation.run_program` runs one now. Starting a program that is already running is refused, so a double tap waters once
 - If Home Assistant restarts while a program runs, its remaining zones are skipped and a notification says so
 - Needs Home Assistant 2025.3 or later
 

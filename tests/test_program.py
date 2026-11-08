@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 import pytest
 from homeassistant.config_entries import SOURCE_RECONFIGURE, SOURCE_USER, ConfigSubentryData
 from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.exceptions import HomeAssistantError
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.irrigation.const import DOMAIN
@@ -137,6 +138,38 @@ async def test_run_now_queues_zones_in_order(hass, daemon):
     assert program_of(entry).data["running_since"]
     assert hass.states.get(PROGRAM_SWITCH).attributes["running"] is True
     assert hass.states.get("sensor.irrigation_program_morning_last_run").state != "unknown"
+
+
+async def test_run_now_twice_doesnt_queue_the_program_again(hass, daemon):
+    """A second Run now while the program runs is refused, so nothing waters twice."""
+    entry = await setup_with_program(hass, daemon)
+    await hass.services.async_call("button", "press", {"entity_id": RUN_NOW}, blocking=True)
+    await hass.async_block_till_done()
+    with pytest.raises(HomeAssistantError, match="already running"):
+        await hass.services.async_call("button", "press", {"entity_id": RUN_NOW}, blocking=True)
+    with pytest.raises(HomeAssistantError, match="already running"):
+        await hass.services.async_call(
+            "irrigation", "run_program", {"entity_id": PROGRAM_SWITCH}, blocking=True
+        )
+    await hass.async_block_till_done()
+    assert daemon.sent() == ["ZONE=1 TIME=120"]
+    queue = hass.data[DOMAIN][entry.entry_id]["queue"]
+    assert [(r.zone, r.seconds) for r in queue.waiting] == [(3, 60)]
+
+
+async def test_double_tap_starts_the_program_once(hass, daemon):
+    """Two presses at the same moment still start the program only once."""
+    entry = await setup_with_program(hass, daemon)
+    results = await asyncio.gather(
+        hass.services.async_call("button", "press", {"entity_id": RUN_NOW}, blocking=True),
+        hass.services.async_call("button", "press", {"entity_id": RUN_NOW}, blocking=True),
+        return_exceptions=True,
+    )
+    await hass.async_block_till_done()
+    assert sum(isinstance(r, HomeAssistantError) for r in results) == 1
+    queue = hass.data[DOMAIN][entry.entry_id]["queue"]
+    assert daemon.sent() == ["ZONE=1 TIME=120"]
+    assert [(r.zone, r.seconds) for r in queue.waiting] == [(3, 60)]
 
 
 async def test_program_ends_when_its_zones_are_done(hass, daemon):
