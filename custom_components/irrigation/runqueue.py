@@ -76,8 +76,8 @@ class RunQueue:
 
     @property
     def running(self) -> bool:
-        """Return true while a queued zone is running."""
-        return self.current is not None
+        """Return true while a zone runs, including the pause before the next one."""
+        return self.current is not None or self._task is not None
 
     def _valve(self, zone: int):
         for entity in self.hass.data[DOMAIN][self._entry_id]["entities"]:
