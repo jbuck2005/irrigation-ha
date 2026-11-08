@@ -126,7 +126,7 @@ class IrrigationZoneValve(ValveEntity):
                 self._port,
                 safe_reply(str(e)),
             )
-            return f"ERR {e}"
+            return safe_reply(f"ERR {e}")
 
     async def async_open_valve(self, **kwargs):
         """Open the valve for the zone's default duration."""

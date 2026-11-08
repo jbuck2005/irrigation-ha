@@ -4,6 +4,12 @@
 
 - README: screenshots, troubleshooting, updating/removing and security sections; blueprint durations hint fixed
 - The integration is listed under the **Garden & plants** category in Home Assistant
+- Setup and **Configure** check the default run time (10 seconds to 2 hours) and the port, and refuse a host or token containing spaces or control characters
+- A reply from `irrigationd` is limited to 4 KB and 10 seconds, so a wrong host can't stall Home Assistant
+- The token is removed from anything logged or shown in an error
+- Any failed status read now counts toward marking zones unavailable
+- A long run no longer holds up Home Assistant's startup or reloads
+- A local test suite in `tests/`, run with `pytest`
 
 ## 1.2.1 - 2026-11-08
 First public release. Earlier versions were private and aren't listed here.
