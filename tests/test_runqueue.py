@@ -68,6 +68,22 @@ async def test_skip_closes_the_zone_and_starts_the_next(hass, loaded, daemon):
     assert hass.states.get(ZONE_2).state == "open"
 
 
+async def test_status_stays_running_between_zones(hass, loaded, daemon):
+    """The pause between two zones still counts as running."""
+    await open_zone(hass, ZONE_1)
+    await open_zone(hass, ZONE_2)
+    with patch("custom_components.irrigation.runqueue.ZONE_GAP", 0.5):
+        await press(hass, "button.irrigation_skip")
+        await asyncio.sleep(0.1)
+        assert hass.states.get(ZONE_1).state == "closed"
+        assert hass.states.get(ZONE_2).state == "closed"
+        assert hass.states.get("sensor.irrigation_status").state == "running"
+        await asyncio.sleep(0.6)
+        await settle(hass)
+    assert hass.states.get(ZONE_2).state == "open"
+    assert hass.states.get("sensor.irrigation_status").state == "running"
+
+
 async def test_zones_run_in_order_when_each_ends(hass, loaded, daemon):
     """When a zone's time is up, the next one starts by itself."""
     queue = queue_of(hass, loaded)
