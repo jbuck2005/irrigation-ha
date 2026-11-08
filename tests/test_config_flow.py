@@ -123,3 +123,29 @@ async def test_options_rejects_zero_duration(hass, loaded):
             result["flow_id"],
             {"host": HOST, "port": PORT, "zones": 4, "default_duration": 0},
         )
+
+
+async def test_options_master_zone_must_exist(hass, loaded):
+    """The master zone has to be one of the controller's zones."""
+    result = await hass.config_entries.options.async_init(loaded.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {"host": HOST, "port": PORT, "zones": 4, "default_duration": 300, "master_zone": 5},
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"master_zone": "invalid_master_zone"}
+
+
+async def test_options_sets_master_valve(hass, loaded, daemon):
+    """Saving a master zone and lead time stores them and reloads."""
+    result = await hass.config_entries.options.async_init(loaded.entry_id)
+    await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {"host": HOST, "port": PORT, "zones": 4, "default_duration": 300,
+         "master_zone": 4, "master_lead": 2},
+    )
+    await hass.async_block_till_done()
+    assert loaded.data["master_zone"] == 4
+    assert loaded.data["master_lead"] == 2
+    assert loaded.data["master_switch"] is None
+    assert hass.data[DOMAIN][loaded.entry_id]["queue"].master_zone == 4

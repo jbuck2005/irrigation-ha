@@ -42,16 +42,33 @@
           "zone_11_duration": "Zone 11 run time (seconds)",
           "zone_12_duration": "Zone 12 run time (seconds)",
           "zone_13_duration": "Zone 13 run time (seconds)",
-          "zone_14_duration": "Zone 14 run time (seconds)"
+          "zone_14_duration": "Zone 14 run time (seconds)",
+          "master_zone": "Master valve or pump zone (0 for none)",
+          "master_switch": "Master valve or pump switch",
+          "master_lead": "Master lead time (seconds)"
         },
         "data_description": {
-          "token": "Leave blank to keep the current token."
+          "token": "Leave blank to keep the current token.",
+          "master_zone": "An irrigationd zone that opens with every other zone, such as a master valve or pump relay. It can't be run on its own.",
+          "master_switch": "Optional. A Home Assistant switch that turns on with every zone. It has no timer of its own, so prefer a zone if you can.",
+          "master_lead": "How long the master opens before each zone."
         }
       }
     },
     "error": {
       "invalid_host": "The host can't contain spaces or control characters.",
-      "invalid_token": "The token can't contain spaces or control characters."
+      "invalid_token": "The token can't contain spaces or control characters.",
+      "invalid_master_zone": "The master zone must be one of this controller's zones, or 0."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "status": {
+        "state": {
+          "idle": "Idle",
+          "running": "Running"
+        }
+      }
     }
   }
 }

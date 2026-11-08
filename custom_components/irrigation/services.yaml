@@ -17,3 +17,6 @@ run:
           step: 10
           unit_of_measurement: "s"
           mode: box
+stop_all:
+  name: Stop all
+  description: Clear every controller's run queue and close all zones and master valves.

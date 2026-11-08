@@ -1,0 +1,206 @@
+"""Tests for the run queue: one zone at a time, Stop all, Skip and the master valve."""
+
+import asyncio
+from unittest.mock import patch
+
+import pytest
+from homeassistant.exceptions import HomeAssistantError
+from homeassistant.setup import async_setup_component
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+from custom_components.irrigation.const import DOMAIN
+
+from .conftest import ENTRY_DATA
+
+ZONE_1 = "valve.irrigation_zone_1"
+ZONE_2 = "valve.irrigation_zone_2"
+
+
+@pytest.fixture(autouse=True)
+def no_gap():
+    """Don't wait between zones in tests."""
+    with patch("custom_components.irrigation.runqueue.ZONE_GAP", 0):
+        yield
+
+
+def queue_of(hass, entry):
+    return hass.data[DOMAIN][entry.entry_id]["queue"]
+
+
+async def open_zone(hass, entity_id):
+    await hass.services.async_call("valve", "open_valve", {"entity_id": entity_id}, blocking=True)
+    await hass.async_block_till_done()
+
+
+async def press(hass, entity_id):
+    await hass.services.async_call("button", "press", {"entity_id": entity_id}, blocking=True)
+    await hass.async_block_till_done()
+
+
+async def settle(hass):
+    """Let the queue's background task take its next steps."""
+    for _ in range(10):
+        await asyncio.sleep(0.02)
+        await hass.async_block_till_done()
+
+
+async def test_second_zone_waits_its_turn(hass, loaded, daemon):
+    """A start while another zone runs is queued, not sent."""
+    await open_zone(hass, ZONE_1)
+    await open_zone(hass, ZONE_2)
+    assert daemon.sent() == ["ZONE=1 TIME=300"]
+    assert hass.states.get(ZONE_2).attributes["queued"] is True
+    status = hass.states.get("sensor.irrigation_status")
+    assert status.state == "running"
+    assert status.attributes["current_zone"] == 1
+    assert status.attributes["queue"] == [{"zone": 2, "seconds": 120}]
+    assert hass.states.get("sensor.irrigation_queued_runs").state == "1"
+
+
+async def test_skip_closes_the_zone_and_starts_the_next(hass, loaded, daemon):
+    """Skip ends the running zone first, then starts the next one."""
+    await open_zone(hass, ZONE_1)
+    await open_zone(hass, ZONE_2)
+    await press(hass, "button.irrigation_skip")
+    await settle(hass)
+    assert daemon.sent() == ["ZONE=1 TIME=300", "ZONE=1 TIME=0", "ZONE=2 TIME=120"]
+    assert hass.states.get(ZONE_1).state == "closed"
+    assert hass.states.get(ZONE_2).state == "open"
+
+
+async def test_zones_run_in_order_when_each_ends(hass, loaded, daemon):
+    """When a zone's time is up, the next one starts by itself."""
+    queue = queue_of(hass, loaded)
+    await queue.async_enqueue(1, 1)
+    await queue.async_enqueue(2, 1)
+    await asyncio.sleep(1.3)
+    await settle(hass)
+    assert daemon.sent()[:3] == ["ZONE=1 TIME=1", "ZONE=1 TIME=0", "ZONE=2 TIME=1"]
+    await asyncio.sleep(1.3)
+    await settle(hass)
+    assert daemon.sent()[-1] == "ZONE=2 TIME=0"
+    assert hass.states.get("sensor.irrigation_status").state == "idle"
+
+
+async def test_closing_the_running_zone_starts_the_next(hass, loaded, daemon):
+    """Closing the running valve is the same as Skip."""
+    await open_zone(hass, ZONE_1)
+    await open_zone(hass, ZONE_2)
+    await hass.services.async_call("valve", "close_valve", {"entity_id": ZONE_1}, blocking=True)
+    await settle(hass)
+    assert daemon.sent()[-1] == "ZONE=2 TIME=120"
+
+
+async def test_closing_a_waiting_zone_cancels_it(hass, loaded, daemon):
+    """Closing a zone that's only waiting takes it out of the queue."""
+    await open_zone(hass, ZONE_1)
+    await open_zone(hass, ZONE_2)
+    await hass.services.async_call("valve", "close_valve", {"entity_id": ZONE_2}, blocking=True)
+    await hass.async_block_till_done()
+    assert hass.states.get(ZONE_2).attributes["queued"] is False
+    assert hass.states.get("sensor.irrigation_queued_runs").state == "0"
+    assert hass.states.get(ZONE_1).state == "open"
+
+
+async def test_stop_all_clears_the_queue(hass, loaded, daemon):
+    """Stop all closes the running zone and starts nothing else."""
+    await open_zone(hass, ZONE_1)
+    await open_zone(hass, ZONE_2)
+    await hass.services.async_call("irrigation", "stop_all", {}, blocking=True)
+    await settle(hass)
+    assert "ZONE=2 TIME=120" not in daemon.sent()
+    assert hass.states.get(ZONE_1).state == "closed"
+    assert hass.states.get("sensor.irrigation_status").state == "idle"
+    assert hass.states.get("sensor.irrigation_queued_runs").state == "0"
+
+
+async def test_stop_all_button_closes_zones_started_elsewhere(hass, loaded, daemon):
+    """Stop all also closes a zone that irrigationd's CLI started."""
+    daemon.run(3, 60)
+    await hass.data[DOMAIN][loaded.entry_id]["status"].async_poll()
+    await hass.async_block_till_done()
+    assert hass.states.get("valve.irrigation_zone_3").state == "open"
+    await press(hass, "button.irrigation_stop_all")
+    assert "ZONE=3 TIME=0" in daemon.sent()
+    assert hass.states.get("valve.irrigation_zone_3").state == "closed"
+
+
+async def test_refused_first_zone_fails_the_action(hass, loaded, daemon):
+    """If nothing is running, a refusal fails the start straight away."""
+    daemon.refuse = {1}
+    with pytest.raises(HomeAssistantError, match="maximum runtime"):
+        await hass.services.async_call("valve", "open_valve", {"entity_id": ZONE_1}, blocking=True)
+    assert hass.states.get("sensor.irrigation_status").state == "idle"
+
+
+async def test_refused_waiting_zone_is_skipped(hass, loaded, daemon):
+    """A queued zone that irrigationd refuses doesn't stop the zones after it."""
+    daemon.refuse = {2}
+    await open_zone(hass, ZONE_1)
+    await open_zone(hass, ZONE_2)
+    await open_zone(hass, "valve.irrigation_zone_3")
+    await press(hass, "button.irrigation_skip")
+    await settle(hass)
+    assert daemon.sent()[-1] == "ZONE=3 TIME=300"
+    assert hass.states.get("valve.irrigation_zone_3").state == "open"
+
+
+async def test_unload_stops_the_running_zone(hass, loaded, daemon):
+    """Unloading or reloading leaves every zone closed."""
+    await open_zone(hass, ZONE_1)
+    await open_zone(hass, ZONE_2)
+    assert await hass.config_entries.async_unload(loaded.entry_id)
+    await hass.async_block_till_done()
+    assert daemon.sent()[-1] == "ZONE=1 TIME=0"
+    assert "ZONE=2 TIME=120" not in daemon.sent()
+
+
+async def setup_with(hass, daemon, **extra):
+    entry = MockConfigEntry(domain=DOMAIN, title="Test Controller", data={**ENTRY_DATA, **extra})
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    return entry
+
+
+async def test_master_zone_opens_with_each_zone(hass, daemon):
+    """The master zone opens before each zone and closes after it."""
+    await setup_with(hass, daemon, master_zone=4, master_lead=0)
+    await open_zone(hass, ZONE_1)
+    await open_zone(hass, ZONE_2)
+    assert daemon.sent() == ["ZONE=4 TIME=300", "ZONE=1 TIME=300"]
+    await press(hass, "button.irrigation_skip")
+    await settle(hass)
+    assert daemon.sent()[2:] == ["ZONE=1 TIME=0", "ZONE=4 TIME=0", "ZONE=4 TIME=120", "ZONE=2 TIME=120"]
+    assert hass.states.get("valve.irrigation_zone_4").attributes["master"] is True
+
+
+async def test_master_zone_cant_run_alone(hass, daemon):
+    """The master zone has no Start of its own."""
+    await setup_with(hass, daemon, master_zone=4)
+    with pytest.raises(HomeAssistantError, match="master valve"):
+        await hass.services.async_call(
+            "valve", "open_valve", {"entity_id": "valve.irrigation_zone_4"}, blocking=True
+        )
+    assert daemon.sent() == []
+
+
+async def test_master_closes_if_the_zone_is_refused(hass, daemon):
+    """A refused zone doesn't leave the master valve open."""
+    await setup_with(hass, daemon, master_zone=4)
+    daemon.refuse = {1}
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call("valve", "open_valve", {"entity_id": ZONE_1}, blocking=True)
+    # The refused start is sent, then the master closes again
+    assert daemon.sent() == ["ZONE=4 TIME=300", "ZONE=1 TIME=300", "ZONE=4 TIME=0"]
+
+
+async def test_master_switch_follows_the_queue(hass, daemon):
+    """A Home Assistant switch used as the master turns on with a zone and off after."""
+    assert await async_setup_component(hass, "input_boolean", {"input_boolean": {"pump": {}}})
+    await setup_with(hass, daemon, master_switch="input_boolean.pump", master_lead=0)
+    await open_zone(hass, ZONE_1)
+    assert hass.states.get("input_boolean.pump").state == "on"
+    await hass.services.async_call("irrigation", "stop_all", {}, blocking=True)
+    await settle(hass)
+    assert hass.states.get("input_boolean.pump").state == "off"

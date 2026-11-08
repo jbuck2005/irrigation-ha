@@ -10,6 +10,12 @@
 - Any failed status read now counts toward marking zones unavailable
 - A long run no longer holds up Home Assistant's startup or reloads
 - A local test suite in `tests/`, run with `pytest`
+- **Zones now run one at a time.** Starting a zone while another runs puts it in a queue, and it starts when the zones ahead of it finish. Closing the running zone starts the next one; closing a waiting zone cancels it
+- **Stop all** and **Skip zone** buttons for each controller, and an `irrigation.stop_all` action. The panel's **Stop all** now clears the queue too
+- Status and queued-runs sensors for each controller
+- An optional master valve or pump: a zone, or a Home Assistant switch, that opens before each zone and closes after it, with a lead time of up to 10 seconds. Set it under **Configure**
+- Reloading a controller, such as after saving **Configure**, now closes its zones
+- The valve's `configured_duration` attribute is now the zone's default run time; the length of the current or last run is in `run_duration`
 
 ## 1.2.1 - 2026-11-08
 First public release. Earlier versions were private and aren't listed here.

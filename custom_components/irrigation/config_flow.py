@@ -6,7 +6,13 @@ from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.const import CONF_HOST, CONF_PORT, CONF_NAME
 import homeassistant.helpers.config_validation as cv
-from homeassistant.helpers.selector import TextSelector, TextSelectorConfig, TextSelectorType
+from homeassistant.helpers.selector import (
+    EntitySelector,
+    EntitySelectorConfig,
+    TextSelector,
+    TextSelectorConfig,
+    TextSelectorType,
+)
 
 from .const import (
     DOMAIN,
@@ -18,6 +24,10 @@ from .const import (
     CONF_DEFAULT_DURATION,
     CONF_ZONE_DURATIONS,
     CONF_CONTROLLER_NUMBER,
+    CONF_MASTER_LEAD,
+    CONF_MASTER_SWITCH,
+    CONF_MASTER_ZONE,
+    MAX_MASTER_LEAD,
     MAX_ZONES,
 )
 
@@ -34,9 +44,16 @@ DURATION_SCHEMA = vol.All(int, vol.Range(min=10, max=7200))
 UNSAFE_CHARS = re.compile(r"[\s\x00-\x1f\x7f]")
 
 
+MASTER_ZONE_SCHEMA = vol.All(int, vol.Range(min=0, max=MAX_ZONES))
+MASTER_LEAD_SCHEMA = vol.All(int, vol.Range(min=0, max=MAX_MASTER_LEAD))
+SWITCH = EntitySelector(EntitySelectorConfig(domain=["switch", "input_boolean"]))
+
+
 def check_fields(user_input) -> dict:
     """Return form errors for a host or token that would break the command line."""
     errors = {}
+    if user_input.get(CONF_MASTER_ZONE, 0) > user_input.get(CONF_ZONES, MAX_ZONES):
+        errors[CONF_MASTER_ZONE] = "invalid_master_zone"
     if UNSAFE_CHARS.search(user_input.get(CONF_HOST, "")):
         errors[CONF_HOST] = "invalid_host"
     if UNSAFE_CHARS.search(user_input.get(CONF_TOKEN) or ""):
@@ -132,6 +149,8 @@ class IrrigationOptionsFlowHandler(config_entries.OptionsFlow):
             # A blank token keeps the stored one
             if not user_input.get(CONF_TOKEN):
                 user_input.pop(CONF_TOKEN, None)
+            # A cleared switch field is left out of the form's answer
+            user_input.setdefault(CONF_MASTER_SWITCH, None)
             
             # Update the config entry with new data
             self.hass.config_entries.async_update_entry(
@@ -157,7 +176,14 @@ class IrrigationOptionsFlowHandler(config_entries.OptionsFlow):
             vol.Required(CONF_ZONES, default=num_zones): ZONES_SCHEMA,
             vol.Required(CONF_DEFAULT_DURATION, default=data.get(CONF_DEFAULT_DURATION, DEFAULT_DURATION)): DURATION_SCHEMA,
             vol.Optional(CONF_TOKEN): PASSWORD,
+            vol.Required(CONF_MASTER_ZONE, default=data.get(CONF_MASTER_ZONE, 0)): MASTER_ZONE_SCHEMA,
+            vol.Required(CONF_MASTER_LEAD, default=data.get(CONF_MASTER_LEAD, 0)): MASTER_LEAD_SCHEMA,
         }
+        master_switch = data.get(CONF_MASTER_SWITCH)
+        if master_switch:
+            schema_dict[vol.Optional(CONF_MASTER_SWITCH, default=master_switch)] = SWITCH
+        else:
+            schema_dict[vol.Optional(CONF_MASTER_SWITCH)] = SWITCH
         
         # Add per-zone duration fields
         for zone in range(1, num_zones + 1):
