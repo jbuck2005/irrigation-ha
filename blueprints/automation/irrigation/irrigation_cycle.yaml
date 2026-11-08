@@ -12,7 +12,7 @@ blueprint:
         time: {}
     zones:
       name: Zones
-      description: List of irrigation zone valves to run in sequence.
+      description: Zone valves to run in order. Pick each valve; areas and devices aren't supported.
       selector:
         target:
           entity:
@@ -21,9 +21,9 @@ blueprint:
     durations:
       name: Zone Durations (seconds)
       description: >
-        A list of durations (in seconds) for each zone. The number of entries must
-        match the number of zones. Example: [300, 600, 300].
-      default: []
+        Run times in seconds, separated by commas, in the same order as the zones.
+        Example: 300,600,300. A zone without a run time runs for 300 seconds.
+      default: ""
       selector:
         text: {}
 
