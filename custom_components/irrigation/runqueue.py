@@ -9,8 +9,11 @@ from dataclasses import dataclass
 import logging
 import time
 
-from homeassistant.core import HomeAssistant
+from homeassistant.const import STATE_OFF, STATE_UNAVAILABLE, STATE_UNKNOWN
+from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers.event import async_track_state_change_event
 
 from .const import DOMAIN
 
@@ -218,12 +221,88 @@ class RunQueue:
             if valve is not None and not valve.is_closed:
                 await self._quietly(valve.async_send_stop())
         if self.master_switch:
-            await self._quietly(
-                self.hass.services.async_call(
-                    self.master_switch.split(".")[0], "turn_off",
-                    {"entity_id": self.master_switch}, blocking=True,
-                )
+            await self._master_switch_off()
+
+    # -- master switch fail-safe ---------------------------------------------
+    #
+    # irrigationd closes its own zones when their time ends, even if Home
+    # Assistant has stopped. A master switch, often a pump, has no such timer,
+    # so a pump left on would run against closed valves. These make sure it
+    # ends up off, and say so loudly when it can't be turned off.
+
+    @property
+    def _stuck_issue(self) -> str:
+        return f"master_switch_stuck_{self._entry_id}"
+
+    async def _master_switch_off(self) -> None:
+        """Turn the master switch off, raising a Repairs issue if that fails."""
+        switch = self.master_switch
+        try:
+            await self.hass.services.async_call(
+                switch.split(".")[0], "turn_off", {"entity_id": switch}, blocking=True
             )
+        except Exception as err:  # noqa: BLE001 - a failed stop must not end the queue
+            _LOGGER.error("Couldn't turn off the master switch %s: %s", switch, err)
+            ir.async_create_issue(
+                self.hass,
+                DOMAIN,
+                self._stuck_issue,
+                is_fixable=False,
+                severity=ir.IssueSeverity.ERROR,
+                translation_key="master_switch_stuck",
+                translation_placeholders={"switch": switch},
+            )
+            return
+        ir.async_delete_issue(self.hass, DOMAIN, self._stuck_issue)
+
+    @callback
+    def async_master_failsafe(self) -> Callable[[], None]:
+        """Turn the master switch off now that Home Assistant has started.
+
+        Nothing is queued after a start or reload, so no zone needs it. If the
+        switch isn't available yet, such as a device still connecting, it's
+        turned off as soon as it is. Returns a function that stops waiting.
+        """
+        switch = self.master_switch
+        if not switch:
+            return lambda: None
+
+        def ready(state) -> bool:
+            return state is not None and state.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN)
+
+        @callback
+        def turn_off_if_on(state) -> None:
+            if state.state != STATE_OFF and not self.running:
+                _LOGGER.warning("Turning off the master switch %s, which was left on", switch)
+                self.hass.async_create_task(self._master_switch_off())
+
+        current = self.hass.states.get(switch)
+        if ready(current):
+            turn_off_if_on(current)
+            return lambda: None
+
+        unsub: Callable[[], None] | None = None
+
+        @callback
+        def changed(event: Event[EventStateChangedData]) -> None:
+            nonlocal unsub
+            new = event.data["new_state"]
+            if not ready(new):
+                return
+            if unsub is not None:
+                unsub()
+                unsub = None
+            turn_off_if_on(new)
+
+        unsub = async_track_state_change_event(self.hass, [switch], changed)
+
+        def stop() -> None:
+            nonlocal unsub
+            if unsub is not None:
+                unsub()
+                unsub = None
+
+        return stop
 
     @staticmethod
     async def _quietly(coro) -> None:
