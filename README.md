@@ -16,11 +16,12 @@ Provides:
 - **A valve for each zone**, grouped under a single device
 - **A default run time for each zone**, with a number entity to change it
 - **Zones run one at a time**: starting a zone while another runs queues it, with **Stop all** and **Skip zone** buttons and status sensors
+- **Watering programs** with start times, watering days and a run time per zone, set up in the UI
 - An optional master valve or pump that opens with every zone
 - Commands sent over TLS with the token as the key, when `irrigationd` supports it
 - Zone state read from `irrigationd`, so runs started elsewhere show up and survive a Home Assistant restart
 - Host, port and token set in the UI, with the token matching `IRRIGATIOND_TOKEN` on the irrigationd host
-- A bundled automation blueprint for watering zones one after another
+- A bundled automation blueprint, for setups that need more than programs
 - Sprinkler icons that change while a zone is running
 
 <p align="center">
@@ -28,7 +29,7 @@ Provides:
 </p>
 
 ### Requirements
-- Home Assistant 2024.7 or later, and 2025.2 or later to keep the token off the network (see [Security and privacy](#security-and-privacy))
+- Home Assistant 2025.3 or later
 - [`irrigationd`](https://github.com/jbuck2005/irrigationd) running and reachable from Home Assistant, with a token set and the `STATUS` command, which Home Assistant uses to read zone state
 - Up to 14 zones per controller
 
@@ -114,6 +115,19 @@ Wire it to `irrigationd` and set it as the **master zone** if you can. `irrigati
 
 A **master switch** is a Home Assistant switch instead. It has no timer of its own, so if Home Assistant goes down mid-run, it stays on until Home Assistant starts again and turns it off. If that turn-off fails, **Repairs** shows a notice.
 
+### Programs
+
+A program waters zones on a schedule, with no automation needed. On the controller's integration page, select **Add program** and set:
+- **Start times**: up to four a day
+- **Days**: every day, chosen weekdays, every few days (counted from the day you save it), or odd or even dates
+- **Run time for each zone**, in minutes, up to 120. 0 skips a zone
+
+At each start time, the program's zones run one at a time in zone order, through the same queue as any other run. The master zone is skipped, since it opens with every zone anyway. To change a program, open its **⋮** menu on the integration page and select **Reconfigure**. Changing "every few days" restarts the count from that day.
+
+Each program is its own device, with a schedule switch, a **Run now** button and next and last run sensors. See [Programs](#programs-1) under Entities.
+
+If Home Assistant restarts while a program is running, its remaining zones are skipped, and a notification says so.
+
 ### Changing the token
 
 Change `IRRIGATIOND_TOKEN` on the irrigationd host and restart `irrigationd`, then enter the same value under **Configure**. The token field is hidden and starts empty, and leaving it blank keeps the current token. Until both sides match, commands fail with `ERR token`.
@@ -165,11 +179,20 @@ A second controller adds its number after `irrigation`, such as `valve.irrigatio
 - `sensor.irrigation_status` is `idle` or `running`, with `current_zone`, `ends_in` (seconds) and `queue` attributes
 - `sensor.irrigation_queued_runs` counts the runs waiting, with their total `queued_seconds`
 
+### Programs
+Each program `<name>` has:
+- `switch.irrigation_program_<name>` turns its schedule on and off. Turning it off doesn't stop a run that has started. Attributes: `running`, `start_times` and `days`
+- `button.irrigation_program_<name>_run_now` runs it now, even with its schedule off
+- `sensor.irrigation_program_<name>_next_run` and `sensor.irrigation_program_<name>_last_run` are timestamps. Next run is unknown while the schedule is off
+
+`sensor.irrigation_status` also has a `program` attribute naming the program that's running.
+
 ### Actions
 - `valve.open_valve` runs a zone for its default run time
 - `irrigation.run` runs one or more zones, with an optional `duration` from 10 to 7200 seconds. Zones beyond the first wait in the queue
 - `valve.close_valve` stops a running zone, which starts the next one, or cancels a waiting one
 - `irrigation.stop_all` clears every controller's queue and closes all zones and master valves
+- `irrigation.run_program` targets a program's switch and runs the program now, even with its schedule off. It's refused if the program is already running
 
 If `irrigationd` refuses a command, the action fails with its reply, which stops an automation at that step. Add `continue_on_error: true` to a step that should carry on regardless. The blueprint already does this.
 
@@ -223,6 +246,8 @@ An optional theme, [`docs/brand/irrigation-theme.yaml`](docs/brand/irrigation-th
 ---
 
 ## Automation Blueprint
+
+The built-in [programs](#programs) replace this blueprint for most people. Use it if you need conditions or triggers that programs don't offer.
 
 A ready-to-use blueprint is bundled in this repo:
 
@@ -287,6 +312,7 @@ use_blueprint:
 - **A zone won't restart**: it reached the 2-hour limit and can't run again for up to 10 minutes unless it's stopped first.
 - **A zone shows "Waiting its turn"**: another zone on the same controller is running. Use **Skip zone** to move on, or **Stop all** to clear the queue.
 - **A Repairs notice says the master switch didn't turn off**: Home Assistant couldn't turn off your master switch after starting. If it's a pump, turn it off by hand now.
+- **A notification says a program was interrupted**: Home Assistant restarted mid-program, so the zones that hadn't run yet were skipped. Start those zones from the panel, or use **Run now** to run the whole program again.
 - **A Repairs notice says the token is sent in plain text**: see [Security and privacy](#security-and-privacy).
 
 Logs are under **Settings → System → Logs**. The token is never written to them. Remove host names and addresses before sharing logs.
@@ -296,7 +322,7 @@ Logs are under **Settings → System → Logs**. The token is never written to t
 ## Security and privacy
 
 - Everything stays on your local network. The integration talks only to `irrigationd`, and sends nothing to the internet.
-- With an `irrigationd` that supports TLS and Home Assistant 2025.2 or later, every command goes over TLS 1.3 using the token as the key, so the token never crosses the network and nobody on it can read, change or replay commands. There are no certificates to set up.
+- With an `irrigationd` that supports TLS, every command goes over TLS 1.3 using the token as the key, so the token never crosses the network and nobody on it can read, change or replay commands. There are no certificates to set up.
 - With an older `irrigationd`, the token goes as plain text, and Home Assistant shows a notice under **Settings → Repairs** until you update it. Once Home Assistant has used TLS with a controller, it never sends that controller the token in plain text again. After updating, add `IRRIGATIOND_PLAIN_TOKEN=no` to `/etc/default/irrigationd` and restart it.
 - Either way, keep `irrigationd` reachable only from your local network, never from the internet.
 - Home Assistant stores the token in its configuration, like other integrations' credentials. The token field is hidden in the UI and never sent back to the browser.
