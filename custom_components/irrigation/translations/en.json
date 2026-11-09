@@ -192,7 +192,7 @@
     },
     "plain_token_old_python": {
       "title": "{name}: the irrigationd token is sent in plain text",
-      "description": "This version of Home Assistant can't use TLS with a pre-shared key, so the irrigationd token on {name} is sent in plain text, where anyone watching the network can read it. Update Home Assistant to 2025.2 or later, and this notice goes away once {name} connects over TLS. Until then, keep `IRRIGATIOND_PLAIN_TOKEN=yes` on the controller."
+      "description": "This version of Home Assistant can't use TLS with a pre-shared key, so the irrigationd token on {name} is sent in plain text, where anyone watching the network can read it. Update Home Assistant to 2025.3 or later, and this notice goes away once {name} connects over TLS. Until then, keep `IRRIGATIOND_PLAIN_TOKEN=yes` on the controller."
     },
     "master_switch_stuck": {
       "title": "The master switch {switch} didn't turn off",

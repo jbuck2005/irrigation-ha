@@ -1,13 +1,14 @@
 run:
   name: Run
-  description: Run zone valves for a custom duration. If no duration is specified, uses each zone's configured default duration.
+  description: Run one or more zones, one at a time, through the run queue. Without a duration, each zone runs for its default run time. A zone that's already running is left as it is.
   target:
     entity:
       integration: irrigation
       domain: valve
   fields:
     duration:
-      description: Duration in seconds (optional - uses zone default if not specified)
+      name: Duration
+      description: Run time in seconds, from 10 to 7200. Leave out to use each zone's default run time.
       required: false
       example: 300
       selector:
