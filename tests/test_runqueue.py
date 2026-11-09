@@ -587,3 +587,29 @@ async def test_master_switch_fail_safe_leaves_a_starting_zones_pump_on(hass, dae
     assert daemon.zones[1] > 0
     assert hass.states.get("switch.pump").state == "on", offs
     assert offs == []
+
+
+async def test_stop_after_two_starts_keeps_the_zone_closed(hass, daemon):
+    """Start pressed twice, then Stop: the second start, still waiting, is called off too."""
+    entry = await setup_with(hass, daemon, master_zone=4, master_lead=0)
+    queue = queue_of(hass, entry)
+    real = daemon.handle
+
+    def slow_start(command, authenticated=False):
+        if command == "ZONE=1 TIME=300":
+            time.sleep(0.5)  # the second start waits behind this one
+        return real(command, authenticated)
+
+    daemon.handle = slow_start
+    first = hass.async_create_task(queue.async_enqueue(1, 300))
+    await asyncio.sleep(0.1)
+    second = hass.async_create_task(queue.async_enqueue(1, 300))
+    await asyncio.sleep(0.1)
+    await hass.services.async_call("valve", "close_valve", {"entity_id": ZONE_1}, blocking=True)
+    for start in (first, second):
+        with pytest.raises(HomeAssistantError):
+            await start
+    await settle(hass)
+    assert daemon.zones[1] == 0 and daemon.zones[4] == 0, daemon.sent()
+    assert daemon.sent().count("ZONE=1 TIME=300") <= 1, daemon.sent()
+    assert not queue.running

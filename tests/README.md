@@ -6,7 +6,7 @@ and never open a valve, so they're safe to run anywhere. The only real sockets
 are a few in `test_status.py` and `test_tls.py`, which talk to a throwaway
 server over a local socket pair.
 
-They run on your own machine, so they don't need GitHub Actions minutes.
+They also run on GitHub for every pull request and push to `main`, in the **Tests** workflow.
 
 ## Run them
 
@@ -27,6 +27,22 @@ uv venv && source .venv/bin/activate
 uv pip install -r requirements_test.txt
 pytest
 ```
+
+## Randomized run-queue tests
+
+`test_runqueue_random.py` fires random starts, Stops, Skips and Stop alls at
+the run queue, with the fake irrigationd answering after random delays, and
+checks rules that must hold whatever the timing: never two zones open at once,
+a zone whose last action was Stop ends closed, and Stop all closes everything.
+Each seed is one random sequence. Pull requests run 40 seeds; for more:
+
+```bash
+IRRIGATION_RANDOM_RUNS=400 pytest tests/test_runqueue_random.py
+```
+
+A failure prints its seed, the actions and the commands irrigationd received.
+Turn a failure into a plain test in `test_runqueue.py` with fixed timing, so it
+stays covered whatever the random seeds do.
 
 ## Writing tests
 
