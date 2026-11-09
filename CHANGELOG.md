@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 1.3.3 - 2026-11-09
+
 - **Stop all now also stops zones that were starting together.** Pressed while one action, such as `irrigation.run` on several zones, was starting them, or while a program's first zone waited for the master valve, Stop all used to let the next of those zones open and run its full time, and could wait for that run to end. Now none of them starts, and a program stops at once
 
 ## 1.3.2 - 2026-11-09

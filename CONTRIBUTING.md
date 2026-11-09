@@ -33,6 +33,8 @@ Problems with the daemon itself belong in [irrigationd](https://github.com/jbuck
 
 Only the maintainer makes releases. The version has to match in four places, or HACS can offer a version that doesn't install.
 
+Other pull requests only add lines under **Unreleased**. They never rename it or change the version, so only the release pull request does, right before the tag. The **Release check** workflow fails a tag whose version doesn't match `manifest.json` and a changelog heading.
+
 1. Set `version` in [`custom_components/irrigation/manifest.json`](custom_components/irrigation/manifest.json) to the new version, such as `1.2.2`.
 2. In [`CHANGELOG.md`](CHANGELOG.md), rename **Unreleased** to `## 1.2.2 - YYYY-MM-DD` and start a new empty **Unreleased** section above it.
 3. Merge both changes to `main` in one pull request.

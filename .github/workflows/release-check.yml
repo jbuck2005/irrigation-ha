@@ -1,0 +1,35 @@
+name: Release check
+
+# A tag must match manifest.json and have its own changelog heading, so the
+# version HACS offers is the version Home Assistant reports.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  versions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check the tag, manifest and changelog agree
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version="${TAG#v}"
+          manifest=$(python3 -c 'import json; print(json.load(open("custom_components/irrigation/manifest.json"))["version"])')
+          if [ "$manifest" != "$version" ]; then
+            echo "::error::Tag $TAG but manifest.json says $manifest"
+            exit 1
+          fi
+          if ! grep -Eq "^## ${version//./\\.} - " CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no '## $version - ' heading"
+            exit 1
+          fi
+          echo "Tag, manifest and changelog all say $version"
