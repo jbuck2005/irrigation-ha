@@ -376,5 +376,6 @@ class RunQueue:
 
     async def async_shutdown(self) -> None:
         """Stop everything when the controller is unloaded."""
-        if self._task is not None or self.waiting:
+        # A first zone that's being started holds the lock, with no task yet
+        if self._task is not None or self.waiting or self._lock.locked():
             await self.async_stop_all()

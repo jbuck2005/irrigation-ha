@@ -3,6 +3,7 @@
 ## Unreleased
 
 - **Stopping a zone that's about to start keeps it closed.** Pressed in the pause before the zone opens, or while the master valve opens ahead of it, Stop used to let it open anyway and run its full time. Starting such a zone again no longer queues a second run, and the panel shows it as waiting
+- Removing, disabling or reloading a controller while its first zone waits for the master valve no longer leaves the master zone open for that zone's run time
 
 ## 1.3.1 - 2026-11-09
 
