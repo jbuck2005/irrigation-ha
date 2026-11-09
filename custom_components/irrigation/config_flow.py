@@ -116,7 +116,7 @@ class IrrigationConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             num_zones = int(user_input.get(CONF_ZONES, DEFAULT_ZONES))
             default_duration = int(user_input.get(CONF_DEFAULT_DURATION, DEFAULT_DURATION))
             zone_durations = {str(zone): default_duration for zone in range(1, num_zones + 1)}
-            
+
             # Take the lowest number no other controller is using
             used = {
                 entry.data.get(CONF_CONTROLLER_NUMBER, 1)
@@ -171,12 +171,12 @@ class IrrigationOptionsFlowHandler(config_entries.OptionsFlow):
             # Extract zone-specific durations from user_input
             num_zones = user_input.get(CONF_ZONES, self._entry.data.get(CONF_ZONES, DEFAULT_ZONES))
             zone_durations = {}
-            
+
             for zone in range(1, num_zones + 1):
                 zone_key = f"zone_{zone}_duration"
                 if zone_key in user_input:
                     zone_durations[str(zone)] = user_input.pop(zone_key)
-            
+
             # Add zone_durations to the data
             user_input[CONF_ZONE_DURATIONS] = zone_durations
 
@@ -196,18 +196,18 @@ class IrrigationOptionsFlowHandler(config_entries.OptionsFlow):
 
             # Update the config entry with new data
             self.hass.config_entries.async_update_entry(self._entry, data=data)
-            
+
             # Reload the entry to apply changes
             await self.hass.config_entries.async_reload(self._entry.entry_id)
-            
+
             return self.async_create_entry(title="", data={})
 
         data = self._entry.data
-        
+
         # Get current zone durations or initialize if missing
         zone_durations = data.get(CONF_ZONE_DURATIONS, {})
         num_zones = data.get(CONF_ZONES, DEFAULT_ZONES)
-        
+
         # Create schema with per-zone duration fields
         schema_dict = {
             vol.Required(CONF_HOST, default=data.get("host", "127.0.0.1")): HOST_SCHEMA,
@@ -227,13 +227,13 @@ class IrrigationOptionsFlowHandler(config_entries.OptionsFlow):
             schema_dict[vol.Optional(CONF_MASTER_SWITCH, default=master_switch)] = SWITCH
         else:
             schema_dict[vol.Optional(CONF_MASTER_SWITCH)] = SWITCH
-        
+
         # Add per-zone duration fields
         for zone in range(1, num_zones + 1):
             zone_key = str(zone)
             default_val = zone_durations.get(zone_key, data.get(CONF_DEFAULT_DURATION, DEFAULT_DURATION))
             schema_dict[vol.Optional(f"zone_{zone}_duration", default=default_val)] = DURATION_SCHEMA
-        
+
         schema = vol.Schema(schema_dict)
         return self.async_show_form(step_id="init", data_schema=schema, errors=errors)
 

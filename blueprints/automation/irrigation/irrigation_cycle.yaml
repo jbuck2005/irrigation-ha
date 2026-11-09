@@ -1,8 +1,8 @@
 blueprint:
   name: Irrigation Cycle
   description: >
-    Run irrigation zones sequentially with configurable durations per zone.
-    Requires the Irrigation integration (irrigation-ha).
+    Run irrigation zones one after another, with a run time for each zone.
+    Requires the Irrigation Controller integration (irrigation-ha).
   domain: automation
   input:
     start_time:

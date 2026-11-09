@@ -369,7 +369,7 @@ class RunQueue:
 
     async def _master_on(self, seconds: int) -> None:
         if self.master_zone:
-            # Opened per zone, so it never reaches irrigationd's 2 hour limit. It
+            # Opened per zone, so it never reaches irrigationd's 2-hour limit. It
             # outlasts the zone by the gap and by the longest the zone's start can
             # take to reach irrigationd, so its own timer never closes it first.
             # Home Assistant closes it as soon as the zone is done anyway.

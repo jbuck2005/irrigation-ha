@@ -3,19 +3,19 @@
 ## Unreleased
 
 - **A start cancelled partway no longer leaves the pump or a zone on.** If the automation or script that started a zone was stopped or restarted while the zone was opening, such as during the master lead time, the master switch could stay on with nothing to turn it off, and the zone could open beside the next one. Starts and Stop all now always run to the end
-- **Stop then Start of the same zone keeps it running.** Each command goes to irrigationd on its own connection, so the start could get there first and the Stop after it, closing the zone while the queue, master valve and pump carried on. A zone's commands now go one at a time, in the order they were asked for
-- Stopping a zone just as its time ends no longer also stops the zone that starts after it
-- Starting a zone while its last run is closing now runs it again, instead of being taken for the run that's ending
-- Stop all also closes zones irrigationd has open that Home Assistant hasn't seen yet, such as one started from irrigationd's command line since the last poll, or just after Home Assistant starts
-- The master zone is opened for 10 seconds more than its zone, so on a slow network its own timer can't close it before the zone ends. Home Assistant still closes it as soon as the zone is done
-- A new test tries every order irrigationd can see the run queue's commands in, for short scripts of starts, Stops, Skips, Stop all, cancelled actions and unloads
+- **Stop then Start of the same zone keeps it running.** Each command goes to `irrigationd` on its own connection, so the start could get there first and the Stop after it, closing the zone while the queue, master valve and pump carried on. A zone's commands now go one at a time, in the order they were asked for
 - **Stop after pressing Start twice keeps the zone closed.** If Start was pressed again while the zone's first start was still on its way, a Stop called off only the first one, and the second then opened the zone for its full time. Every start of a zone asked for before its Stop is now called off, wherever it has got to. Found by the new randomized run-queue tests
-- Irrigation Controller is now in the default HACS list: install it by searching the Marketplace or HACS, with no custom repository needed
-- **Stopping a zone just as it starts keeps it closed.** A Stop sent while the zone's start was on its way to irrigationd could get there first, so the zone then opened and ran its full time while Home Assistant showed it closed. The zone is now closed again once its start is answered
-- A zone started the moment the queue finished its last zone no longer loses its master valve: the queue's final, repeated master stop could reach irrigationd after the new zone's master start
+- **Stopping a zone just as it starts keeps it closed.** A Stop sent while the zone's start was on its way to `irrigationd` could get there first, so the zone then opened and ran its full time while Home Assistant showed it closed. The zone is now closed again once its start is answered
+- Stopping a zone just as its time ends no longer also stops the zone that starts after it
+- Starting a zone while its last run is closing now runs it again, instead of the start being mistaken for the run that's ending
+- A zone started the moment the queue finished its last zone no longer loses its master valve: the queue's final, repeated master stop could reach `irrigationd` after the new zone's master start
 - The master switch fail-safe no longer turns the pump off while the first zone starts. A switch whose state was unknown at startup, such as an optimistic MQTT or template switch, got its first state from the queue turning it on, and the fail-safe then turned it off again
-- Docs: the README says how to let Home Assistant reach an `irrigationd` on another machine, the `irrigation.run` action describes the queue and its run time range, and the Repairs notice for an old Python names Home Assistant 2025.3, the oldest supported
-- The run queue now decides whether a zone may open in one place, checked before every step that could open a valve. The tests run on GitHub for every pull request, including new randomized tests of starts and Stops at random times
+- Stop all also closes zones `irrigationd` has open that Home Assistant hasn't seen yet, such as one started from `irrigationd`'s command line since the last poll, or just after Home Assistant starts
+- The master zone is opened for 10 seconds more than its zone, so on a slow network its own timer can't close it before the zone ends. Home Assistant still closes it as soon as the zone is done
+- The run queue now decides in one place whether a zone may open, and checks before every step that could open a valve
+- Irrigation Controller is now in the default HACS list: install it by searching the Marketplace or HACS, with no custom repository needed
+- Docs: the README says how to let Home Assistant reach an `irrigationd` on another machine, the `irrigation.run` action describes the queue and its run time range, and the Repairs notice for an old Python names Home Assistant 2025.3, the oldest supported. Spelling, grammar and wording made consistent across the README, UI text and code comments, and program run times are labelled in minutes
+- Tests: the suite runs on GitHub for every pull request, with new randomized tests of starts and Stops at random times, and a test that tries every order `irrigationd` can see the run queue's commands in, for short scripts of starts, Stops, Skips, Stop all, cancelled actions and unloads
 
 ## 1.3.3 - 2026-11-09
 

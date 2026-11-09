@@ -66,7 +66,7 @@ If it doesn't show up, your HACS list may be out of date. As a fallback, add `ht
 
 ## Configuration
 
-After restart, add the integration from the UI:
+After restarting, add the integration from the UI:
 
 **Settings → Devices & Services → Add Integration → Irrigation Controller**
 
@@ -85,26 +85,26 @@ These can be changed later under **Configure**, including the token. Leave the t
   <img src="docs/screenshots/integration.png" alt="The Irrigation Controller integration page with one controller, and its Configure button" width="80%">
 </p>
 
-### Configuring Individual Zone Durations
+### Setting each zone's run time
 
-After initial setup, you can configure each zone's default duration in two ways:
+After setup, you can set each zone's default run time in two ways:
 
-#### Option 1: Device Page (Recommended)
+#### Option 1: Device page (recommended)
 1. Go to **Settings → Devices & Services → Irrigation Controller**
-2. Click on your controller's device, which has the name you gave it at setup
+2. Select your controller's device, which has the name you gave it at setup
 3. You'll see `number.irrigation_zone_X_default_duration` entities for each zone
-4. Adjust each zone's duration as needed (10 - 7200 seconds)
+4. Adjust each zone's run time as needed, from 10 to 7200 seconds
 
 <p align="center">
   <img src="docs/screenshots/device.png" alt="The controller's device page, with a valve for each zone under Controls and a default run time for each zone under Configuration" width="60%">
 </p>
 
-#### Option 2: Configure (Bulk Edit)
+#### Option 2: Configure (all zones at once)
 1. Go to **Settings → Devices & Services → Irrigation Controller**
 2. Click **Configure**
 3. You'll see individual run time fields for each zone, from 10 to 7200 seconds
-4. Adjust all zones at once and click **Submit**
-5. The integration will reload automatically with new settings
+4. Adjust all zones at once and select **Submit**
+5. The integration reloads with the new settings
 
 If you change **Number of zones**, submit, then open **Configure** again to set run times for the new zones. Until you do, they use the default run time.
 
@@ -175,7 +175,7 @@ title: Irrigation
 A second controller adds its number after `irrigation`, such as `valve.irrigation_2_zone_1`.
 
 ### Valves
-- `valve.irrigation_zone_X` → Zone valve for each irrigation zone, with the state `open` or `closed`
+- `valve.irrigation_zone_X` is the valve for each zone, with the state `open` or `closed`
 - Attributes: `remaining` (seconds left), `configured_duration` (the zone's default run time), `run_duration` (the current or last run), `queued` (waiting its turn), `master` (it's the master valve) and `zone` (its number)
 
 ### Buttons
@@ -203,18 +203,18 @@ Each program `<name>` has:
 
 If `irrigationd` refuses a command, the action fails with its reply, which stops an automation at that step. Add `continue_on_error: true` to a step that should carry on regardless. The blueprint already does this.
 
-### Number Entities
-- `number.irrigation_zone_X_default_duration` → Configure default run time for each zone individually. A second controller's are named like `number.irrigation_2_zone_1_default_duration`
+### Numbers
+- `number.irrigation_zone_X_default_duration` sets each zone's default run time. A second controller's are named like `number.irrigation_2_zone_1_default_duration`
 - Adjustable from 10 seconds to 2 hours (7200 seconds)
 - Changes apply to the next run
 - Persisted across Home Assistant restarts
-- Accessible in Settings → Devices & Services → Irrigation Controller, on your controller's device
+- Found under **Settings → Devices & Services → Irrigation Controller**, on your controller's device
 
-### Per-Zone Configuration Benefits
-- **Different watering needs**: Set longer durations for lawn zones, shorter for drip irrigation
-- **Seasonal adjustments**: Easily adjust individual zone times without reconfiguring the whole integration
-- **Quick access**: Modify zone durations directly from the device page or entity cards
-- **Automation friendly**: Use the number entities in automations to dynamically adjust watering schedules
+### Why each zone has its own run time
+- **Different watering needs**: set longer run times for lawn zones, shorter for drip irrigation
+- **Seasonal adjustments**: change one zone's time without reconfiguring the whole integration
+- **Quick access**: change run times from the device page or entity cards
+- **Automation friendly**: use the number entities in automations to adjust watering schedules
 
 ---
 
@@ -243,8 +243,7 @@ cards:
     hours_to_show: 24
 ```
 
-You can extend this with custom cards (e.g. `bar-card`) to show countdown timers
-and progress bars per zone.
+You can extend this with custom cards, such as `bar-card`, to show a countdown and progress bar for each zone.
 
 ### Brand colours
 
@@ -252,7 +251,7 @@ An optional theme, [`docs/brand/irrigation-theme.yaml`](docs/brand/irrigation-th
 
 ---
 
-## Automation Blueprint
+## Automation blueprint
 
 The built-in [programs](#programs) replace this blueprint for most people. Use it if you need conditions or triggers that programs don't offer.
 
@@ -272,16 +271,16 @@ Then create an automation from **Irrigation Cycle**.
 
 ### Example setup
 
-- Start Time: `06:00:00`
-- Zones: select all your irrigation zone valves
-- Durations: `300,600,300`
+- **Start Time**: `06:00:00`
+- **Zones**: select your zone valves
+- **Zone Durations (seconds)**: `300,600,300`
 
 This will:
-1. Run Zone 1 for 300s
-2. Run Zone 2 for 600s
-3. Run Zone 3 for 300s
+1. Run zone 1 for 300 seconds
+2. Run zone 2 for 600 seconds
+3. Run zone 3 for 300 seconds
 
-Durations are comma-separated, in the same order as the zones, without brackets. A zone with no duration runs for 300 seconds. If a zone is refused, the cycle moves on to the next one.
+Run times are comma-separated, in the same order as the zones, without brackets. A zone with no duration runs for 300 seconds. If a zone is refused, the cycle moves on to the next one.
 
 Pick the zone valves one by one. Choosing an area or a device in the zone picker runs nothing.
 

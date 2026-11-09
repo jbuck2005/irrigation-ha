@@ -5,7 +5,8 @@ Irrigation integration bootstrap.
 - Declares CONFIG_SCHEMA as config_entry_only so hassfest knows this integration
   is configured via the UI only.
 - Sets up the integration by storing config entry data in hass.data and
-  forwarding platform setup to the `valve`, `number`, `sensor` and `button` platforms.
+  forwarding platform setup to the `valve`, `number`, `sensor`, `button` and
+  `switch` platforms.
 - Gives each controller a run queue, so zones run one at a time, and
   registers `irrigation.stop_all`.
 - Serves the sidebar panel and dashboard card from the `frontend` folder.
@@ -111,7 +112,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     }
     entry.async_on_unload(entry.add_update_listener(_async_entry_updated))
 
-    # Forward setup to the valve and number platforms
+    # Forward setup to every platform
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     # Read the real zone state now, so a run that outlasted a restart shows up

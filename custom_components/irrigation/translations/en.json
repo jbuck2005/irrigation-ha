@@ -21,7 +21,7 @@
     "error": {
       "invalid_host": "The host can't contain spaces or control characters.",
       "invalid_token": "The token can't contain spaces or control characters.",
-      "token_too_short": "The token must be at least 16 characters. irrigationd generates one for you during make install."
+      "token_too_short": "The token must be at least 16 characters. irrigationd's make install generates one for you."
     }
   },
   "options": {
@@ -57,7 +57,7 @@
           "token": "Leave blank to keep the current token.",
           "master_zone": "An irrigationd zone that opens with every other zone, such as a master valve or pump relay. It can't be run on its own.",
           "master_switch": "Optional. A Home Assistant switch that turns on with every zone. It has no timer of its own, so prefer a zone if you can.",
-          "master_lead": "How long the master opens before each zone.",
+          "master_lead": "How long the master valve or pump opens before each zone, up to 10 seconds.",
           "allow_plain_token": "Only for an irrigationd too old for TLS. When on, the token is sent where anyone on the network can read it, until irrigationd answers over TLS. Leave off unless this controller can't be updated."
         }
       }
@@ -66,7 +66,7 @@
       "invalid_host": "The host can't contain spaces or control characters.",
       "invalid_token": "The token can't contain spaces or control characters.",
       "invalid_master_zone": "The master zone must be one of this controller's zones, or 0.",
-      "token_too_short": "The token must be at least 16 characters. irrigationd generates one for you during make install."
+      "token_too_short": "The token must be at least 16 characters. irrigationd's make install generates one for you."
     }
   },
   "entity": {
@@ -97,20 +97,20 @@
             "days": "Days",
             "weekdays": "Weekdays",
             "interval": "Every how many days",
-            "zone_1_minutes": "Zone 1 run time",
-            "zone_2_minutes": "Zone 2 run time",
-            "zone_3_minutes": "Zone 3 run time",
-            "zone_4_minutes": "Zone 4 run time",
-            "zone_5_minutes": "Zone 5 run time",
-            "zone_6_minutes": "Zone 6 run time",
-            "zone_7_minutes": "Zone 7 run time",
-            "zone_8_minutes": "Zone 8 run time",
-            "zone_9_minutes": "Zone 9 run time",
-            "zone_10_minutes": "Zone 10 run time",
-            "zone_11_minutes": "Zone 11 run time",
-            "zone_12_minutes": "Zone 12 run time",
-            "zone_13_minutes": "Zone 13 run time",
-            "zone_14_minutes": "Zone 14 run time"
+            "zone_1_minutes": "Zone 1 run time (minutes)",
+            "zone_2_minutes": "Zone 2 run time (minutes)",
+            "zone_3_minutes": "Zone 3 run time (minutes)",
+            "zone_4_minutes": "Zone 4 run time (minutes)",
+            "zone_5_minutes": "Zone 5 run time (minutes)",
+            "zone_6_minutes": "Zone 6 run time (minutes)",
+            "zone_7_minutes": "Zone 7 run time (minutes)",
+            "zone_8_minutes": "Zone 8 run time (minutes)",
+            "zone_9_minutes": "Zone 9 run time (minutes)",
+            "zone_10_minutes": "Zone 10 run time (minutes)",
+            "zone_11_minutes": "Zone 11 run time (minutes)",
+            "zone_12_minutes": "Zone 12 run time (minutes)",
+            "zone_13_minutes": "Zone 13 run time (minutes)",
+            "zone_14_minutes": "Zone 14 run time (minutes)"
           },
           "data_description": {
             "start_1": "Leave a start time blank to skip it. Up to four starts a day.",
@@ -129,20 +129,20 @@
             "days": "Days",
             "weekdays": "Weekdays",
             "interval": "Every how many days",
-            "zone_1_minutes": "Zone 1 run time",
-            "zone_2_minutes": "Zone 2 run time",
-            "zone_3_minutes": "Zone 3 run time",
-            "zone_4_minutes": "Zone 4 run time",
-            "zone_5_minutes": "Zone 5 run time",
-            "zone_6_minutes": "Zone 6 run time",
-            "zone_7_minutes": "Zone 7 run time",
-            "zone_8_minutes": "Zone 8 run time",
-            "zone_9_minutes": "Zone 9 run time",
-            "zone_10_minutes": "Zone 10 run time",
-            "zone_11_minutes": "Zone 11 run time",
-            "zone_12_minutes": "Zone 12 run time",
-            "zone_13_minutes": "Zone 13 run time",
-            "zone_14_minutes": "Zone 14 run time"
+            "zone_1_minutes": "Zone 1 run time (minutes)",
+            "zone_2_minutes": "Zone 2 run time (minutes)",
+            "zone_3_minutes": "Zone 3 run time (minutes)",
+            "zone_4_minutes": "Zone 4 run time (minutes)",
+            "zone_5_minutes": "Zone 5 run time (minutes)",
+            "zone_6_minutes": "Zone 6 run time (minutes)",
+            "zone_7_minutes": "Zone 7 run time (minutes)",
+            "zone_8_minutes": "Zone 8 run time (minutes)",
+            "zone_9_minutes": "Zone 9 run time (minutes)",
+            "zone_10_minutes": "Zone 10 run time (minutes)",
+            "zone_11_minutes": "Zone 11 run time (minutes)",
+            "zone_12_minutes": "Zone 12 run time (minutes)",
+            "zone_13_minutes": "Zone 13 run time (minutes)",
+            "zone_14_minutes": "Zone 14 run time (minutes)"
           },
           "data_description": {
             "start_1": "Leave a start time blank to skip it. Up to four starts a day.",

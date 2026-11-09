@@ -58,27 +58,27 @@ class IrrigationZoneDuration(NumberEntity):
     async def async_set_native_value(self, value: float) -> None:
         """Update the zone's default duration."""
         new_duration = int(value)
-        
+
         # Get the config entry
         entry = self.hass.config_entries.async_get_entry(self._entry_id)
         if not entry:
             _LOGGER.error("Config entry not found for zone %s", self._zone)
             return
-        
+
         # Update the zone_durations dictionary
         zone_durations = dict(entry.data.get(CONF_ZONE_DURATIONS, {}))
         zone_durations[str(self._zone)] = new_duration
-        
+
         # Update the config entry
         self.hass.config_entries.async_update_entry(
             entry,
             data={**entry.data, CONF_ZONE_DURATIONS: zone_durations}
         )
-        
+
         # Update the entity state
         self._attr_native_value = new_duration
         self.async_write_ha_state()
-        
+
         # Update the corresponding valve entity's default duration
         if DOMAIN in self.hass.data and self._entry_id in self.hass.data[DOMAIN]:
             for entity in self.hass.data[DOMAIN][self._entry_id].get("entities", []):
