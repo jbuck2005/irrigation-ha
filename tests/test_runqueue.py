@@ -308,3 +308,42 @@ async def test_master_switch_that_wont_turn_off_raises_an_issue(hass, daemon):
     await settle(hass)
     assert hass.states.get("switch.pump").state == "off"
     assert stuck_issue(hass, entry) is None
+
+
+async def test_failing_master_switch_closes_the_master_zone(hass, daemon):
+    """If the switch fails after the master zone opened, the master zone closes again."""
+    await setup_with(hass, daemon, master_zone=4, master_switch="switch.pump", master_lead=0)
+
+    async def turn_on(call):
+        raise RuntimeError("relay not responding")
+
+    async def turn_off(call):
+        pass
+
+    hass.services.async_register("switch", "turn_on", turn_on)
+    hass.services.async_register("switch", "turn_off", turn_off)
+    with pytest.raises(Exception, match="relay not responding"):
+        await hass.services.async_call("valve", "open_valve", {"entity_id": ZONE_1}, blocking=True)
+    await settle(hass)
+    assert daemon.sent() == ["ZONE=4 TIME=300", "ZONE=4 TIME=0"]
+    assert hass.states.get("valve.irrigation_zone_4").state == "closed"
+
+
+async def test_unexpected_error_skips_only_that_zone(hass, loaded, daemon):
+    """An unexpected error starting a waiting zone skips it, and the queue goes on."""
+    await open_zone(hass, ZONE_1)
+    await open_zone(hass, ZONE_2)
+    await open_zone(hass, "valve.irrigation_zone_3")
+    queue = queue_of(hass, loaded)
+    zone_2 = next(e for e in hass.data[DOMAIN][loaded.entry_id]["entities"] if e._zone == 2)
+    real_send_run = zone_2.async_send_run
+
+    async def broken(seconds):
+        raise RuntimeError("unexpected")
+
+    zone_2.async_send_run = broken
+    await press(hass, "button.irrigation_skip")
+    await settle(hass)
+    zone_2.async_send_run = real_send_run
+    assert queue.current is not None and queue.current.zone == 3
+    assert not queue.waiting

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Plain text is off for new controllers.** A new option, **Allow the token in plain text**, is needed before the token is ever sent unencrypted to an `irrigationd` too old for TLS. Existing controllers keep their current behaviour, and it can be changed under **Configure**
+- A newly entered token must be at least 16 characters. A shorter token that is already stored keeps working, and Repairs shows a notice suggesting a new one
+- If the master switch fails to turn on after a master zone opened, the master zone is closed again, and an unexpected error starting a queued zone skips only that zone
+
 ## 1.3.0 - 2026-11-08
 
 ### Before you update

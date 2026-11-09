@@ -175,7 +175,7 @@ class RunQueue:
                     await asyncio.sleep(ZONE_GAP)
                     try:
                         await self._open(candidate)
-                    except HomeAssistantError as err:
+                    except Exception as err:  # noqa: BLE001 - one bad zone mustn't strand the rest
                         # Like the blueprint: a refused zone doesn't stop the ones after it
                         _LOGGER.warning("Skipping zone %s: %s", candidate.zone, err)
                         continue
@@ -190,12 +190,14 @@ class RunQueue:
     async def _open(self, run: QueuedRun) -> None:
         """Open the master valve, wait the lead time, then open the zone."""
         valve = self._valve(run.zone)
-        await self._master_on(run.seconds)
-        if self.master_lead and (self.master_zone or self.master_switch):
-            await asyncio.sleep(self.master_lead)
         try:
+            await self._master_on(run.seconds)
+            if self.master_lead and (self.master_zone or self.master_switch):
+                await asyncio.sleep(self.master_lead)
             await valve.async_send_run(run.seconds)
-        except HomeAssistantError:
+        except Exception:
+            # Whichever step failed, such as the master switch after the master
+            # zone opened, nothing is left open without a zone to feed
             await self._master_off()
             raise
         # Cleared here, not in the worker, so a Skip pressed before the worker runs still counts

@@ -17,13 +17,13 @@ from homeassistant.components import frontend, panel_custom
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall, callback
-from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import config_validation as cv, issue_registry as ir
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.loader import async_get_integration
 
-from .const import CONF_MASTER_LEAD, CONF_MASTER_SWITCH, CONF_MASTER_ZONE
+from .const import CONF_MASTER_LEAD, CONF_MASTER_SWITCH, CONF_MASTER_ZONE, MIN_TOKEN_LENGTH
 from .program import Scheduler
 from .runqueue import RunQueue
 from .status import STATUS_INTERVAL, IrrigationdClient, StatusPoller
@@ -81,6 +81,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         master_lead=entry.data.get(CONF_MASTER_LEAD, 0),
     )
     hass.data[DOMAIN][entry.entry_id]["queue"] = queue
+
+    # A stored short token keeps working, but say it can be guessed
+    issue_id = f"short_token_{entry.entry_id}"
+    if len(entry.data.get("token") or "") < MIN_TOKEN_LENGTH:
+        ir.async_create_issue(
+            hass, DOMAIN, issue_id, is_fixable=False, severity=ir.IssueSeverity.WARNING,
+            translation_key="short_token", translation_placeholders={"name": entry.title},
+        )
+    else:
+        ir.async_delete_issue(hass, DOMAIN, issue_id)
 
     @callback
     def _queue_changed() -> None:

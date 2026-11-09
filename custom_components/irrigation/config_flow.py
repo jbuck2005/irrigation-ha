@@ -47,7 +47,9 @@ from .const import (
     CONF_MASTER_ZONE,
     MAX_MASTER_LEAD,
     CONF_TLS,
+    CONF_ALLOW_PLAIN,
     MAX_ZONES,
+    MIN_TOKEN_LENGTH,
 )
 
 
@@ -75,8 +77,13 @@ def check_fields(user_input) -> dict:
         errors[CONF_MASTER_ZONE] = "invalid_master_zone"
     if UNSAFE_CHARS.search(user_input.get(CONF_HOST, "")):
         errors[CONF_HOST] = "invalid_host"
-    if UNSAFE_CHARS.search(user_input.get(CONF_TOKEN) or ""):
+    token = user_input.get(CONF_TOKEN) or ""
+    if UNSAFE_CHARS.search(token):
         errors[CONF_TOKEN] = "invalid_token"
+    elif token and len(token) < MIN_TOKEN_LENGTH:
+        # Only a newly typed token: a stored one is never refused or cleared.
+        # A short token could be guessed offline from one recorded handshake.
+        errors[CONF_TOKEN] = "token_too_short"
     return errors
 # Hidden, so the stored token never reaches the browser
 PASSWORD = TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD))
@@ -127,6 +134,7 @@ class IrrigationConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 CONF_ZONE_DURATIONS: zone_durations,
                 "token": user_input[CONF_TOKEN],
                 CONF_CONTROLLER_NUMBER: controller_number,
+                CONF_ALLOW_PLAIN: bool(user_input.get(CONF_ALLOW_PLAIN, False)),
             }
             return self.async_create_entry(title=entry_data["name"], data=entry_data)
 
@@ -139,6 +147,7 @@ class IrrigationConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Required(CONF_ZONES, default=DEFAULT_ZONES): ZONES_SCHEMA,
                 vol.Required(CONF_DEFAULT_DURATION, default=DEFAULT_DURATION): DURATION_SCHEMA,
                 vol.Required(CONF_TOKEN): vol.All(PASSWORD, TOKEN_SCHEMA),
+                vol.Optional(CONF_ALLOW_PLAIN, default=False): bool,
             }
         )
         return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
@@ -206,6 +215,10 @@ class IrrigationOptionsFlowHandler(config_entries.OptionsFlow):
             vol.Required(CONF_ZONES, default=num_zones): ZONES_SCHEMA,
             vol.Required(CONF_DEFAULT_DURATION, default=data.get(CONF_DEFAULT_DURATION, DEFAULT_DURATION)): DURATION_SCHEMA,
             vol.Optional(CONF_TOKEN): PASSWORD,
+            vol.Required(
+                CONF_ALLOW_PLAIN,
+                default=data.get(CONF_ALLOW_PLAIN, not data.get(CONF_TLS, False)),
+            ): bool,
             vol.Required(CONF_MASTER_ZONE, default=data.get(CONF_MASTER_ZONE, 0)): MASTER_ZONE_SCHEMA,
             vol.Required(CONF_MASTER_LEAD, default=data.get(CONF_MASTER_LEAD, 0)): MASTER_LEAD_SCHEMA,
         }

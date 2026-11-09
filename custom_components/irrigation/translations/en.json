@@ -10,13 +10,18 @@
           "port": "Port",
           "zones": "Number of zones",
           "default_duration": "Default run time (seconds)",
-          "token": "Token"
+          "token": "Token",
+          "allow_plain_token": "Allow the token in plain text"
+        },
+        "data_description": {
+          "allow_plain_token": "Only for an irrigationd too old for TLS. When on, the token is sent where anyone on the network can read it, until irrigationd answers over TLS. Leave off unless this controller can't be updated."
         }
       }
     },
     "error": {
       "invalid_host": "The host can't contain spaces or control characters.",
-      "invalid_token": "The token can't contain spaces or control characters."
+      "invalid_token": "The token can't contain spaces or control characters.",
+      "token_too_short": "The token must be at least 16 characters. irrigationd generates one for you during make install."
     }
   },
   "options": {
@@ -45,20 +50,23 @@
           "zone_14_duration": "Zone 14 run time (seconds)",
           "master_zone": "Master valve or pump zone (0 for none)",
           "master_switch": "Master valve or pump switch",
-          "master_lead": "Master lead time (seconds)"
+          "master_lead": "Master lead time (seconds)",
+          "allow_plain_token": "Allow the token in plain text"
         },
         "data_description": {
           "token": "Leave blank to keep the current token.",
           "master_zone": "An irrigationd zone that opens with every other zone, such as a master valve or pump relay. It can't be run on its own.",
           "master_switch": "Optional. A Home Assistant switch that turns on with every zone. It has no timer of its own, so prefer a zone if you can.",
-          "master_lead": "How long the master opens before each zone."
+          "master_lead": "How long the master opens before each zone.",
+          "allow_plain_token": "Only for an irrigationd too old for TLS. When on, the token is sent where anyone on the network can read it, until irrigationd answers over TLS. Leave off unless this controller can't be updated."
         }
       }
     },
     "error": {
       "invalid_host": "The host can't contain spaces or control characters.",
       "invalid_token": "The token can't contain spaces or control characters.",
-      "invalid_master_zone": "The master zone must be one of this controller's zones, or 0."
+      "invalid_master_zone": "The master zone must be one of this controller's zones, or 0.",
+      "token_too_short": "The token must be at least 16 characters. irrigationd generates one for you during make install."
     }
   },
   "entity": {
@@ -180,7 +188,7 @@
   "issues": {
     "plain_token": {
       "title": "{name}: the irrigationd token is sent in plain text",
-      "description": "irrigationd on {name} doesn't support TLS yet, so Home Assistant sends the token in plain text, where anyone watching the network can read it. Update irrigationd on the controller and reinstall it with `sudo make install`. Home Assistant switches to TLS by itself within an hour, and this notice goes away. Then add `IRRIGATIOND_PLAIN_TOKEN=no` to `/etc/default/irrigationd` and restart irrigationd."
+      "description": "irrigationd on {name} doesn't support TLS yet, so Home Assistant sends the token in plain text, where anyone watching the network can read it. Update irrigationd on the controller and reinstall it with `sudo make install`. Home Assistant switches to TLS by itself within an hour, and this notice goes away. Then add `IRRIGATIOND_PLAIN_TOKEN=no` to `/etc/default/irrigationd` and restart irrigationd. Until then, you can turn off **Allow the token in plain text** under **Configure** to stop it being sent at all, but this controller will be unreachable until irrigationd is updated."
     },
     "plain_token_old_python": {
       "title": "{name}: the irrigationd token is sent in plain text",
@@ -189,6 +197,10 @@
     "master_switch_stuck": {
       "title": "The master switch {switch} didn't turn off",
       "description": "Home Assistant tried to turn off {switch}, the master valve or pump for irrigation, and it failed. If it's a pump, it may be running against closed valves. Check it now and turn it off by hand. This notice goes away the next time it turns off."
+    },
+    "short_token": {
+      "title": "{name}: the irrigationd token is short",
+      "description": "The token for {name} is shorter than 16 characters. Anyone who records one connection could try guesses against it offline. Generate a new one on the controller with `openssl rand -hex 16`, put it in `/etc/default/irrigationd`, restart irrigationd, then enter it under **Configure**. This notice goes away once the token is long enough."
     }
   }
 }

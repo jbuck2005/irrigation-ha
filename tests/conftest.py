@@ -13,7 +13,7 @@ from .fake_irrigationd import FakeIrrigationd
 # Documentation address (RFC 5737), never a real controller
 HOST = "192.0.2.10"
 PORT = 4242
-TOKEN = "test-token"
+TOKEN = "test-token-0123456789abcdef"
 
 ENTRY_DATA = {
     "name": "Test Controller",
