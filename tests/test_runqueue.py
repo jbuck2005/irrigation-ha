@@ -185,10 +185,10 @@ async def test_master_zone_opens_with_each_zone(hass, daemon):
     await setup_with(hass, daemon, master_zone=4, master_lead=0)
     await open_zone(hass, ZONE_1)
     await open_zone(hass, ZONE_2)
-    assert daemon.sent() == ["ZONE=4 TIME=300", "ZONE=1 TIME=300"]
+    assert daemon.sent() == ["ZONE=4 TIME=310", "ZONE=1 TIME=300"]
     await press(hass, "button.irrigation_skip")
     await settle(hass)
-    assert daemon.sent()[2:] == ["ZONE=1 TIME=0", "ZONE=4 TIME=0", "ZONE=4 TIME=120", "ZONE=2 TIME=120"]
+    assert daemon.sent()[2:] == ["ZONE=1 TIME=0", "ZONE=4 TIME=0", "ZONE=4 TIME=130", "ZONE=2 TIME=120"]
     assert hass.states.get("valve.irrigation_zone_4").attributes["master"] is True
 
 
@@ -210,7 +210,7 @@ async def test_master_closes_if_the_zone_is_refused(hass, daemon):
         await hass.services.async_call("valve", "open_valve", {"entity_id": ZONE_1}, blocking=True)
     # The refused start is sent, then a stop in case only its reply was lost,
     # then the master closes again
-    assert daemon.sent() == ["ZONE=4 TIME=300", "ZONE=1 TIME=300", "ZONE=1 TIME=0", "ZONE=4 TIME=0"]
+    assert daemon.sent() == ["ZONE=4 TIME=310", "ZONE=1 TIME=300", "ZONE=1 TIME=0", "ZONE=4 TIME=0"]
 
 
 async def test_master_switch_follows_the_queue(hass, daemon):
@@ -327,7 +327,7 @@ async def test_failing_master_switch_closes_the_master_zone(hass, daemon):
     with pytest.raises(Exception, match="relay not responding"):
         await hass.services.async_call("valve", "open_valve", {"entity_id": ZONE_1}, blocking=True)
     await settle(hass)
-    assert daemon.sent() == ["ZONE=4 TIME=300", "ZONE=4 TIME=0"]
+    assert daemon.sent() == ["ZONE=4 TIME=310", "ZONE=4 TIME=0"]
     assert hass.states.get("valve.irrigation_zone_4").state == "closed"
 
 

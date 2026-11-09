@@ -16,6 +16,7 @@ from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.event import async_track_state_change_event
 
 from .const import DOMAIN
+from .status import COMMAND_DEADLINE, parse_status, safe_reply
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -86,6 +87,8 @@ class RunQueue:
         self._zone_stops: Counter[int] = Counter()
         # Set once the controller is unloading, so nothing new can start
         self._closed = False
+        # Stop alls still running, which unloading waits for
+        self._stop_tasks: set[asyncio.Task] = set()
         self._listeners: list[Callable[[], None]] = []
 
     # -- state for entities ------------------------------------------------
@@ -128,6 +131,26 @@ class RunQueue:
             )
         self._valve(zone)
         run = QueuedRun(zone, seconds, program, self._stops, self._zone_stops[zone])
+        await self._to_the_end(self._async_enqueue(run))
+
+    async def _to_the_end(self, coro, tasks: set[asyncio.Task] | None = None) -> None:
+        """Run `coro` in its own task, so it finishes even if the caller is cancelled.
+
+        A caller can be cancelled at any await, such as an automation restarted
+        or a script stopped while its zone opens. Stopping a start halfway would
+        leave the master valve or pump on with nothing to turn it off, and a Stop
+        all halfway would leave zones open, so both always run to the end.
+        """
+        task = self.hass.async_create_task(coro, f"irrigation run queue {self._entry_id} step")
+        # Read the result even when no one waits for it any more, so it isn't logged as lost
+        task.add_done_callback(lambda done: done.cancelled() or done.exception())
+        if tasks is not None:
+            tasks.add(task)
+            task.add_done_callback(tasks.discard)
+        await asyncio.shield(task)
+
+    async def _async_enqueue(self, run: QueuedRun) -> None:
+        zone, program = run.zone, run.program
         # One action on several zones calls this for each at the same time, so
         # the idle check and the first zone's start must happen as one step
         async with self._lock:
@@ -178,21 +201,28 @@ class RunQueue:
             return True
         return False
 
-    def skip(self) -> None:
-        """End the running zone early and go on to the next one."""
-        if self.current is not None:
+    def skip(self, run: QueuedRun | None = None) -> None:
+        """End the running zone early and go on to the next one.
+
+        With `run`, only if that run is still the one running: a Stop that took
+        a while mustn't end the zone that started after it.
+        """
+        if self.current is not None and (run is None or self.current is run):
             self._advance.set()
 
     async def async_stop_all(self) -> None:
         """Clear the queue and close every zone and the master valve."""
         self._stops += 1
         self._stops_running += 1
+        await self._to_the_end(self._async_stop_all(), self._stop_tasks)
+
+    async def _async_stop_all(self) -> None:
         try:
-            await self._async_stop_all()
+            await self._stop_everything()
         finally:
             self._stops_running -= 1
 
-    async def _async_stop_all(self) -> None:
+    async def _stop_everything(self) -> None:
         self.waiting.clear()
         # Wait for a zone that's being started right now, so it gets stopped too
         async with self._lock:
@@ -204,11 +234,30 @@ class RunQueue:
         # A start that arrived while stopping mustn't run later
         self.waiting.clear()
         # Also close zones started outside the queue, such as from irrigationd's CLI
-        for entity in self.hass.data[DOMAIN][self._entry_id]["entities"]:
+        entities = self.hass.data[DOMAIN][self._entry_id]["entities"]
+        for entity in entities:
             if not entity.is_closed:
                 await self._quietly(entity.async_send_stop())
+        await self._close_unseen(entities)
         await self._master_off()
         self._changed()
+
+    async def _close_unseen(self, entities) -> None:
+        """Close zones irrigationd has open that Home Assistant doesn't know about yet.
+
+        Home Assistant learns of a zone started elsewhere only at the next poll,
+        up to 15 seconds later, or longer while polls fail or just after a restart.
+        """
+        client = self.hass.data[DOMAIN][self._entry_id]["client"]
+        try:
+            zones = parse_status(await client.async_send("STATUS"))
+        except Exception as err:  # noqa: BLE001 - irrigationd can't be reached, so the stops above are all that can be done
+            _LOGGER.warning("Couldn't check irrigationd for open zones: %s", safe_reply(str(err)))
+            return
+        for entity in entities:
+            # A reply that can't be read, such as from an older irrigationd, closes every zone
+            if zones is None or zones.get(entity._zone, (False, 0))[0]:
+                await self._quietly(entity.async_send_stop())
 
     # -- running -------------------------------------------------------------
 
@@ -311,16 +360,21 @@ class RunQueue:
 
     async def _close(self, run: QueuedRun) -> None:
         """Close the zone that just ran and the master valve."""
+        # Not running from here on, so a start of the same zone while it closes
+        # is queued to run again, rather than taken for the run that's ending
+        self.current = None
         await self._quietly(self._valve(run.zone).async_send_stop())
         await self._master_off()
-        self.current = None
         self._changed()
 
     async def _master_on(self, seconds: int) -> None:
         if self.master_zone:
-            # Opened per zone, so it never reaches irrigationd's 2 hour limit
+            # Opened per zone, so it never reaches irrigationd's 2 hour limit. It
+            # outlasts the zone by the gap and by the longest the zone's start can
+            # take to reach irrigationd, so its own timer never closes it first.
+            # Home Assistant closes it as soon as the zone is done anyway.
             await self._valve(self.master_zone).async_send_run(
-                min(7200, seconds + self.master_lead + ZONE_GAP)
+                min(7200, seconds + self.master_lead + ZONE_GAP + COMMAND_DEADLINE)
             )
         if self.master_switch:
             await self.hass.services.async_call(
@@ -437,3 +491,6 @@ class RunQueue:
         # A first zone that's being started holds the lock, with no task yet
         if self._task is not None or self.waiting or self._lock.locked():
             await self.async_stop_all()
+        # A Stop all pressed just before must finish while the zones are still here
+        if self._stop_tasks:
+            await asyncio.wait(set(self._stop_tasks))

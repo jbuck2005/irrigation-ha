@@ -67,6 +67,8 @@ class IrrigationZoneValve(ValveEntity):
         self._off_timer = None
         self._tick_task = None
         self._last_command = 0.0
+        # The zone's last command, which the next one waits for; see _send_command
+        self._last_send: asyncio.Task | None = None
         self._attr_device_info = device
 
     @property
@@ -120,10 +122,27 @@ class IrrigationZoneValve(ValveEntity):
         return f"ZONE={zone} TIME={seconds}"
 
     async def _send_command(self, command: str) -> str:
-        """Send a command to irrigationd and return the response."""
+        """Send a command to irrigationd and return the response.
+
+        Each command goes on its own connection, and two connections can reach
+        irrigationd in either order, so a Stop then a start of the same zone
+        could arrive start first and leave it closed. So a zone's commands go
+        one at a time, each sent once the one before has been answered. The
+        command is sent even if the caller is cancelled, so the order holds.
+        """
         client = self.hass.data[DOMAIN][self._entry_id]["client"]
-        try:
+        previous = self._last_send
+
+        async def send() -> str:
+            if previous is not None:
+                await asyncio.wait([previous])
             return await client.async_send(command)
+
+        task = self.hass.async_create_task(send(), f"irrigation zone {self._zone} command")
+        task.add_done_callback(lambda done: done.cancelled() or done.exception())
+        self._last_send = task
+        try:
+            return await asyncio.shield(task)
         except Exception as e:  # noqa: BLE001 - reported to the user as a failed command
             _LOGGER.error(
                 "Error sending command to irrigationd %s:%s -> %s",
@@ -150,12 +169,19 @@ class IrrigationZoneValve(ValveEntity):
     async def async_close_valve(self, **kwargs):
         """Close the valve now. If it was running from the queue, the next zone starts."""
         queue = self._queue
+        # Noted before the stop is sent: by the time it's answered this zone's
+        # time may have ended and the next zone started, which must keep running
+        run = queue.current if queue.current is not None and queue.current.zone == self._zone else None
         queue.remove(self._zone)
-        if queue.current is not None and queue.current.zone == self._zone:
+        try:
             await self.async_send_stop()
-            queue.skip()
-            return
-        await self.async_send_stop()
+        except asyncio.CancelledError:
+            # The stop is still sent, so the run is over either way
+            if run is not None:
+                queue.skip(run)
+            raise
+        if run is not None:
+            queue.skip(run)
 
     async def async_send_run(self, duration):
         """Tell irrigationd to run this zone now. Only the run queue calls this."""

@@ -44,6 +44,24 @@ A failure prints its seed, the actions and the commands irrigationd received.
 Turn a failure into a plain test in `test_runqueue.py` with fixed timing, so it
 stays covered whatever the random seeds do.
 
+## Every order, for short scripts
+
+`test_runqueue_interleavings.py` holds each command to the fake irrigationd,
+and each of the queue's own waits, until the test lets it through. For each
+short script of actions (Start, Stop, Skip, a zone's time ending, Stop all,
+a cancelled action, unloading) it tries every order they can be let through
+in, replaying each path from the start, and checks the rules in its docstring
+once nothing more can happen. Pull requests try every script of two actions
+and some longer ones. To try every script of three actions, which takes
+about half an hour:
+
+```bash
+IRRIGATION_INTERLEAVINGS=full pytest -n 4 tests/test_runqueue_interleavings.py
+```
+
+(`-n` needs `pip install pytest-xdist`.) A failure prints the script, the
+path of choices and the commands irrigationd received.
+
 ## Writing tests
 
 - Use the `loaded` fixture for a controller with four zones already set up,

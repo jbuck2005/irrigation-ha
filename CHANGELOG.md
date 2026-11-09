@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **A start cancelled partway no longer leaves the pump or a zone on.** If the automation or script that started a zone was stopped or restarted while the zone was opening, such as during the master lead time, the master switch could stay on with nothing to turn it off, and the zone could open beside the next one. Starts and Stop all now always run to the end
+- **Stop then Start of the same zone keeps it running.** Each command goes to irrigationd on its own connection, so the start could get there first and the Stop after it, closing the zone while the queue, master valve and pump carried on. A zone's commands now go one at a time, in the order they were asked for
+- Stopping a zone just as its time ends no longer also stops the zone that starts after it
+- Starting a zone while its last run is closing now runs it again, instead of being taken for the run that's ending
+- Stop all also closes zones irrigationd has open that Home Assistant hasn't seen yet, such as one started from irrigationd's command line since the last poll, or just after Home Assistant starts
+- The master zone is opened for 10 seconds more than its zone, so on a slow network its own timer can't close it before the zone ends. Home Assistant still closes it as soon as the zone is done
+- A new test tries every order irrigationd can see the run queue's commands in, for short scripts of starts, Stops, Skips, Stop all, cancelled actions and unloads
 - **Stop after pressing Start twice keeps the zone closed.** If Start was pressed again while the zone's first start was still on its way, a Stop called off only the first one, and the second then opened the zone for its full time. Every start of a zone asked for before its Stop is now called off, wherever it has got to. Found by the new randomized run-queue tests
 - Irrigation Controller is now in the default HACS list: install it by searching the Marketplace or HACS, with no custom repository needed
 - **Stopping a zone just as it starts keeps it closed.** A Stop sent while the zone's start was on its way to irrigationd could get there first, so the zone then opened and ran its full time while Home Assistant showed it closed. The zone is now closed again once its start is answered
