@@ -458,3 +458,15 @@ async def test_starting_a_zone_again_during_the_master_lead_does_nothing(hass, d
     await queue.async_enqueue(2, 2)
     await asyncio.sleep(8)
     assert daemon.sent().count("ZONE=2 TIME=2") == 1, daemon.sent()
+
+
+async def test_unload_during_the_first_zones_master_lead_opens_nothing(hass, daemon):
+    """Unloading while the first zone waits for the master valve leaves both closed."""
+    entry = await setup_with(hass, daemon, master_zone=4, master_lead=2)
+    start = hass.async_create_task(queue_of(hass, entry).async_enqueue(1, 300))
+    await asyncio.sleep(0.5)  # the master is open; zone 1 waits out the lead
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    with pytest.raises(HomeAssistantError):
+        await start
+    await asyncio.sleep(0.2)
+    assert daemon.zones[1] == 0 and daemon.zones[4] == 0, daemon.sent()
