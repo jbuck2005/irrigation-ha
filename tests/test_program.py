@@ -1,7 +1,7 @@
 """Tests for programs: schedules, the Add program flow, entities and starting runs."""
 
 import asyncio
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
@@ -325,3 +325,45 @@ async def test_remove_program(hass, daemon):
     await hass.async_block_till_done()
     assert hass.states.get(PROGRAM_SWITCH) is None or hass.states.get(PROGRAM_SWITCH).state == "unavailable"
     assert hass.data[DOMAIN][entry.entry_id]["program_ids"] == set()
+
+
+async def test_repeated_hour_when_clocks_go_back_starts_once(hass, daemon):
+    """A start time in the hour that repeats when clocks go back runs only once."""
+    await hass.config.async_set_time_zone("America/New_York")
+    entry = await setup_with_program(hass, daemon, start_times=["01:30"])
+    scheduler = hass.data[DOMAIN][entry.entry_id]["scheduler"]
+    # 2026-11-01: 01:30 EDT is 05:30 UTC, and 01:30 EST an hour later
+    await scheduler._async_tick(datetime(2026, 11, 1, 5, 30, tzinfo=timezone.utc))
+    await hass.async_block_till_done()
+    await hass.services.async_call("irrigation", "stop_all", {}, blocking=True)
+    await hass.async_block_till_done()
+    await scheduler._async_tick(datetime(2026, 11, 1, 6, 30, tzinfo=timezone.utc))
+    await hass.async_block_till_done()
+    assert daemon.sent().count("ZONE=1 TIME=120") == 1
+
+
+async def test_start_in_the_skipped_hour_runs_after_it(hass, daemon):
+    """A start time in the hour skipped when clocks go forward runs once, at the end of the gap."""
+    await hass.config.async_set_time_zone("America/New_York")
+    entry = await setup_with_program(hass, daemon, start_times=["02:30"])
+    scheduler = hass.data[DOMAIN][entry.entry_id]["scheduler"]
+    # 2026-03-08: 01:59 EST is 06:59 UTC, and the next minute is 03:00 EDT
+    await scheduler._async_tick(datetime(2026, 3, 8, 6, 59, tzinfo=timezone.utc))
+    await hass.async_block_till_done()
+    assert daemon.sent() == []
+    await scheduler._async_tick(datetime(2026, 3, 8, 7, 0, tzinfo=timezone.utc))
+    await hass.async_block_till_done()
+    assert daemon.sent() == ["ZONE=1 TIME=120"]
+
+
+async def test_next_day_still_starts(hass, daemon):
+    """Starting once doesn't stop the same time the next day."""
+    entry = await setup_with_program(hass, daemon)
+    scheduler = hass.data[DOMAIN][entry.entry_id]["scheduler"]
+    tz = ZoneInfo(hass.config.time_zone)
+    await scheduler._async_tick(datetime(2026, 11, 8, 6, 0, tzinfo=tz))
+    await hass.async_block_till_done()
+    await hass.services.async_call("irrigation", "stop_all", {}, blocking=True)
+    await scheduler._async_tick(datetime(2026, 11, 9, 6, 0, tzinfo=tz))
+    await hass.async_block_till_done()
+    assert daemon.sent().count("ZONE=1 TIME=120") == 2
