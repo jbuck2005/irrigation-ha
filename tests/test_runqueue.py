@@ -1,6 +1,7 @@
 """Tests for the run queue: one zone at a time, Stop all, Skip and the master valve."""
 
 import asyncio
+import time
 from unittest.mock import patch
 
 import pytest
@@ -492,3 +493,97 @@ async def test_stop_all_while_several_zones_start_opens_nothing_more(hass, daemo
     opened = [c for c in daemon.sent() if c.startswith(("ZONE=1 ", "ZONE=2 ", "ZONE=3 ")) and not c.endswith("TIME=0")]
     assert opened == [], daemon.sent()
     assert not queue.running
+
+
+async def test_stopping_a_zone_while_its_start_is_on_the_way_closes_it(hass, daemon):
+    """A Stop that reaches irrigationd before the zone's start still leaves it closed."""
+    entry = await setup_with(hass, daemon, master_zone=4, master_lead=0)
+    queue = queue_of(hass, entry)
+    real = daemon.handle
+
+    def slow_start(command, authenticated=False):
+        if command == "ZONE=1 TIME=300":
+            time.sleep(0.5)  # the Stop overtakes it
+        return real(command, authenticated)
+
+    daemon.handle = slow_start
+    start = hass.async_create_task(queue.async_enqueue(1, 300))
+    await asyncio.sleep(0.2)  # the start is on its way to irrigationd
+    await hass.services.async_call("valve", "close_valve", {"entity_id": ZONE_1}, blocking=True)
+    with pytest.raises(HomeAssistantError):
+        await start
+    await settle(hass)
+    assert daemon.zones[1] == 0 and daemon.zones[4] == 0, daemon.sent()
+    assert hass.states.get(ZONE_1).state == "closed"
+    assert not queue.running
+
+
+async def test_stopping_a_waiting_zone_while_its_start_is_on_the_way_closes_it(hass, daemon):
+    """The same for a zone the queue starts after another one."""
+    entry = await setup_with(hass, daemon)
+    queue = queue_of(hass, entry)
+    real = daemon.handle
+
+    def slow_start(command, authenticated=False):
+        if command == "ZONE=2 TIME=300":
+            time.sleep(0.5)
+        return real(command, authenticated)
+
+    daemon.handle = slow_start
+    await queue.async_enqueue(1, 1)
+    await queue.async_enqueue(2, 300)
+    await asyncio.sleep(1.2)  # zone 1 has ended; zone 2's start is on its way
+    await hass.services.async_call("valve", "close_valve", {"entity_id": ZONE_2}, blocking=True)
+    await asyncio.sleep(0.6)
+    await settle(hass)
+    assert daemon.zones[2] == 0, daemon.sent()
+    assert not queue.running
+
+
+async def test_a_start_right_after_the_queue_ends_keeps_its_master(hass, daemon):
+    """A zone started as the last one finishes isn't left without its master valve."""
+    entry = await setup_with(hass, daemon, master_zone=4, master_lead=0)
+    queue = queue_of(hass, entry)
+    real = daemon.handle
+
+    def slow_master_stop(command, authenticated=False):
+        if command == "ZONE=4 TIME=0":
+            time.sleep(0.3)
+        return real(command, authenticated)
+
+    daemon.handle = slow_master_stop
+    await queue.async_enqueue(1, 1)
+    # Zone 1 ends after 1 s, and its master stop takes 0.3 s
+    for _ in range(40):
+        await asyncio.sleep(0.05)
+        if queue._task is None:
+            break
+    await queue.async_enqueue(2, 300)
+    await asyncio.sleep(0.8)
+    assert daemon.zones[2] > 0
+    assert daemon.zones[4] > 0, daemon.sent()
+
+
+async def test_master_switch_fail_safe_leaves_a_starting_zones_pump_on(hass, daemon):
+    """A switch whose first state comes from the queue turning it on isn't turned off."""
+    hass.states.async_set("switch.pump", "unknown")
+    entry = await setup_with(hass, daemon, master_switch="switch.pump", master_lead=2)
+    queue = queue_of(hass, entry)
+    offs = []
+
+    async def turn_on(call):
+        hass.states.async_set("switch.pump", "on")
+
+    async def turn_off(call):
+        offs.append(queue.current.zone if queue.current else None)
+        hass.states.async_set("switch.pump", "off")
+
+    hass.services.async_register("switch", "turn_on", turn_on)
+    hass.services.async_register("switch", "turn_off", turn_off)
+    await settle(hass)
+    start = hass.async_create_task(queue.async_enqueue(1, 300))
+    await asyncio.sleep(2.5)  # past the lead: zone 1 is open
+    await start
+    assert daemon.zones[1] > 0
+    assert hass.states.get("switch.pump").state == "on", offs
+    assert offs == []

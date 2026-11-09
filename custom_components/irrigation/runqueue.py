@@ -209,6 +209,7 @@ class RunQueue:
 
     async def _worker(self, run: QueuedRun | None) -> None:
         """Wait out the running zone, then start each waiting zone in turn."""
+        finished = False
         try:
             while run is not None:
                 # Stop all may have come while this zone was opening
@@ -240,10 +241,16 @@ class RunQueue:
                         continue
                     run = candidate
                     break
+            finished = True
         finally:
             self.current = None
             self._task = None
-            await self._master_off()
+            # On the way out the master is already closed: _close closed it and
+            # nothing has opened it since. Closing it again here would race a
+            # zone started the moment the queue went idle, and could close its
+            # master. Only an error or cancellation leaves it to close here.
+            if not finished:
+                await self._master_off()
             self._changed()
 
     async def _open(self, run: QueuedRun) -> None:
@@ -264,6 +271,11 @@ class RunQueue:
                 # The reply may have been lost after irrigationd opened it
                 await self._quietly(valve.async_send_stop())
                 raise
+            if run.cancelled:
+                # Stopped while the start was on its way: the Stop may have
+                # reached irrigationd first, so close the zone again
+                await self._quietly(valve.async_send_stop())
+                raise HomeAssistantError(f"Zone {run.zone} wasn't started: it was stopped")
         except Exception:
             # Whichever step failed, such as the master switch after the master
             # zone opened, nothing is left open without a zone to feed
@@ -358,7 +370,8 @@ class RunQueue:
 
         @callback
         def turn_off_if_on(state) -> None:
-            if state.state != STATE_OFF and not self.running:
+            # A zone being started has turned it on, or is about to
+            if state.state != STATE_OFF and not self.running and not self._lock.locked():
                 _LOGGER.warning("Turning off the master switch %s, which was left on", switch)
                 self.hass.async_create_task(self._master_switch_off())
 

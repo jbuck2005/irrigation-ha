@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Stopping a zone just as it starts keeps it closed.** A Stop sent while the zone's start was on its way to irrigationd could get there first, so the zone then opened and ran its full time while Home Assistant showed it closed. The zone is now closed again once its start is answered
+- A zone started the moment the queue finished its last zone no longer loses its master valve: the queue's final, repeated master stop could reach irrigationd after the new zone's master start
+- The master switch fail-safe no longer turns the pump off while the first zone starts. A switch whose state was unknown at startup, such as an optimistic MQTT or template switch, got its first state from the queue turning it on, and the fail-safe then turned it off again
+
 ## 1.3.3 - 2026-11-09
 
 - **Stop all now also stops zones that were starting together.** Pressed while one action, such as `irrigation.run` on several zones, was starting them, or while a program's first zone waited for the master valve, Stop all used to let the next of those zones open and run its full time, and could wait for that run to end. Now none of them starts, and a program stops at once
