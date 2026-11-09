@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 1.3.1 - 2026-11-09
+
 - **Plain text is off for new controllers.** A new option, **Allow the token in plain text**, is needed before the token is ever sent unencrypted to an `irrigationd` too old for TLS. Existing controllers keep their current behaviour, and it can be changed under **Configure**
 - A newly entered token must be at least 16 characters. A shorter token that is already stored keeps working, and Repairs shows a notice suggesting a new one
 - If the master switch fails to turn on after a master zone opened, the master zone is closed again, and an unexpected error starting a queued zone skips only that zone
@@ -10,6 +12,8 @@
 - If a start's reply is lost, the zone and master zone are sent a stop, so nothing is left open without Home Assistant knowing
 - A busy `irrigationd` (too many connections open, or rate limiting) is no longer mistaken for one too old for TLS, so it never leads to the token being sent in plain text
 - A program's start time runs once even when clocks go back and the hour repeats, and a start time in the hour skipped when clocks go forward now runs at the end of that gap instead of not at all
+
+The matching `irrigationd` security fixes are in [its changelog](https://github.com/jbuck2005/irrigationd/blob/main/CHANGELOG.md).
 
 ## 1.3.0 - 2026-11-08
 
