@@ -367,3 +367,22 @@ async def test_next_day_still_starts(hass, daemon):
     await scheduler._async_tick(datetime(2026, 11, 9, 6, 0, tzinfo=tz))
     await hass.async_block_till_done()
     assert daemon.sent().count("ZONE=1 TIME=120") == 2
+
+
+async def test_stop_all_while_a_program_starts_ends_the_program(hass, daemon):
+    """Stop all while a program's first zone waits for the master doesn't start its next zone."""
+    entry = await setup_with_program(hass, daemon)
+    hass.config_entries.async_update_entry(entry, data={**entry.data, "master_zone": 4, "master_lead": 2})
+    await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+    press = hass.async_create_task(
+        hass.services.async_call("button", "press", {"entity_id": RUN_NOW}, blocking=True)
+    )
+    await asyncio.sleep(0.5)  # zone 1 waits out the master lead
+    async with asyncio.timeout(5):
+        await hass.services.async_call("irrigation", "stop_all", {}, blocking=True)
+    await press
+    await asyncio.sleep(3)
+    opened = [c for c in daemon.sent() if c.startswith(("ZONE=1 ", "ZONE=3 ")) and not c.endswith("TIME=0")]
+    assert opened == [], daemon.sent()
+    assert not program_of(entry).data["running_since"]

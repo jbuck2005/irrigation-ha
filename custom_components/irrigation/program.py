@@ -22,6 +22,8 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.event import async_track_time_change
 from homeassistant.util import dt as dt_util
 
+from .runqueue import StoppedError
+
 _LOGGER = logging.getLogger(__name__)
 
 SUBENTRY_PROGRAM = "program"
@@ -198,6 +200,10 @@ class Scheduler:
             try:
                 await self.queue.async_enqueue(zone, seconds, sub.subentry_id)
                 started += 1
+            except StoppedError as err:
+                # Stop all ends the whole program, not just the zone it caught
+                _LOGGER.info("Program %s stopped: %s", sub.title, err)
+                break
             except HomeAssistantError as err:
                 # Only the first zone can fail here; later ones are skipped by the queue itself
                 _LOGGER.warning("Program %s: zone %s didn't start: %s", sub.title, zone, err)
