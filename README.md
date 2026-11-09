@@ -74,7 +74,8 @@ You will be asked for:
 - **Port** (default: 4242)
 - **Number of zones** (default: 4, maximum: 14)
 - **Default run time** (seconds, default: 300): the starting run time for every zone
-- **Token**: the same value as `IRRIGATIOND_TOKEN` on the irrigationd host
+- **Token**: the same value as `IRRIGATIOND_TOKEN` on the irrigationd host, at least 16 characters. `irrigationd`'s `make install` generates one for you
+- **Allow the token in plain text** (default: off): only for an `irrigationd` too old for TLS. See [Security and privacy](#security-and-privacy)
 
 These can be changed later under **Configure**, including the token. Leave the token blank to keep the current one.
 
@@ -132,7 +133,7 @@ If Home Assistant restarts while a program is running, its remaining zones are s
 
 ### Changing the token
 
-Change `IRRIGATIOND_TOKEN` on the irrigationd host and restart `irrigationd`, then enter the same value under **Configure**. The token field is hidden and starts empty, and leaving it blank keeps the current token. Until both sides match, commands fail with `ERR token`.
+Generate a new token on the irrigationd host with `openssl rand -hex 16`, set it as `IRRIGATIOND_TOKEN` in `/etc/default/irrigationd` and restart `irrigationd`, then enter the same value under **Configure**. The token field is hidden and starts empty, and leaving it blank keeps the current token. A new token must be at least 16 characters. Until both sides match, commands fail with `ERR token`.
 
 ---
 
@@ -316,6 +317,9 @@ use_blueprint:
 - **A Repairs notice says the master switch didn't turn off**: Home Assistant couldn't turn off your master switch after starting. If it's a pump, turn it off by hand now.
 - **A notification says a program was interrupted**: Home Assistant restarted mid-program, so the zones that hadn't run yet were skipped. Start those zones from the panel, or use **Run now** to run the whole program again.
 - **A Repairs notice says the token is sent in plain text**: see [Security and privacy](#security-and-privacy).
+- **A Repairs notice says the token is too short**: generate a new one, as in [Changing the token](#changing-the-token).
+- **A new controller can't connect, and the log says plain text is turned off**: its `irrigationd` is too old for TLS. Update `irrigationd`, or turn on **Allow the token in plain text** under **Configure** for now.
+- **Commands fail with `ERR server busy`**: `irrigationd` has too many connections open. Set `IRRIGATIOND_TRUSTED_ADDR` to Home Assistant's address, and look for a device on your network connecting to it repeatedly.
 
 Logs are under **Settings → System → Logs**. The token is never written to them. Remove host names and addresses before sharing logs.
 
@@ -325,10 +329,12 @@ Logs are under **Settings → System → Logs**. The token is never written to t
 
 - Everything stays on your local network. The integration talks only to `irrigationd`, and sends nothing to the internet.
 - With an `irrigationd` that supports TLS, every command goes over TLS 1.3 using the token as the key, so the token never crosses the network and nobody on it can read, change or replay commands. There are no certificates to set up.
-- With an older `irrigationd`, the token goes as plain text, and Home Assistant shows a notice under **Settings → Repairs** until you update it. Once Home Assistant has used TLS with a controller, it never sends that controller the token in plain text again. After updating, add `IRRIGATIOND_PLAIN_TOKEN=no` to `/etc/default/irrigationd` and restart it.
-- Either way, keep `irrigationd` reachable only from your local network, never from the internet.
+- An older `irrigationd` without TLS needs the token in plain text, where anyone on the network can read it. Home Assistant only sends it that way if **Allow the token in plain text** is on under **Configure**. It's off for new controllers, which then can't reach an old `irrigationd` until it's updated. Controllers added before this option keep working as they did.
+- While the token goes in plain text, Home Assistant shows a notice under **Settings → Repairs**. Once Home Assistant has used TLS with a controller, it never sends that controller the token in plain text again. After updating `irrigationd`, add `IRRIGATIOND_PLAIN_TOKEN=no` to `/etc/default/irrigationd` and restart it.
+- A token shorter than 16 characters could be guessed offline from one recorded connection. A short token you already have keeps working, with a Repairs notice until you [change it](#changing-the-token).
+- Either way, keep `irrigationd` reachable only from your local network, never from the internet. To let only Home Assistant connect, run `sudo systemctl edit irrigationd` on the irrigationd host, add `IPAddressDeny=any` and `IPAddressAllow=localhost <Home Assistant address>` under `[Service]`, and restart it.
 - Home Assistant stores the token in its configuration, like other integrations' credentials. The token field is hidden in the UI and never sent back to the browser.
-- `irrigationd` limits failed token attempts. Set `IRRIGATIOND_TRUSTED_ADDR` on the irrigationd host to Home Assistant's address, so a flood of bad attempts can't block its commands.
+- `irrigationd` limits failed token attempts, closes each connection after 5 seconds, and allows at most 16 connections at once and 4 from one address. Set `IRRIGATIOND_TRUSTED_ADDR` on the irrigationd host to Home Assistant's address, so it keeps a slot and isn't locked out by bad attempts or a device holding connections open.
 
 To report a security problem, see the [security policy](SECURITY.md).
 
