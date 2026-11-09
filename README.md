@@ -30,8 +30,10 @@ Provides:
 
 ### Requirements
 - Home Assistant 2025.3 or later
-- [`irrigationd`](https://github.com/jbuck2005/irrigationd) running and reachable from Home Assistant, with a token set and the `STATUS` command, which Home Assistant uses to read zone state
+- [`irrigationd`](https://github.com/jbuck2005/irrigationd) running and reachable from Home Assistant, with a token set and the `STATUS` command, which Home Assistant uses to read zone state. Use its latest release, which has the matching security fixes
 - Up to 14 zones per controller
+
+`irrigationd` listens only on `127.0.0.1` by default. If Home Assistant runs on another machine, set `IRRIGATIOND_BIND_ADDR` in `/etc/default/irrigationd` to an address Home Assistant can reach, set `IRRIGATIOND_TRUSTED_ADDR` to Home Assistant's address, and restart `irrigationd`.
 
 ---
 
@@ -312,7 +314,7 @@ use_blueprint:
 ## Troubleshooting
 
 - **Commands fail with `ERR token`**: the token in Home Assistant doesn't match `IRRIGATIOND_TOKEN` on the irrigationd host. See [Changing the token](#changing-the-token).
-- **Zones show as unavailable**: Home Assistant couldn't read zone state from `irrigationd` for 45 seconds. Check that `irrigationd` is running, and that the host and port under **Configure** are right.
+- **Zones show as unavailable**: Home Assistant couldn't read zone state from `irrigationd` for 45 seconds. Check that `irrigationd` is running, that the host and port under **Configure** are right, and, if Home Assistant is on another machine, that `IRRIGATIOND_BIND_ADDR` isn't `127.0.0.1`. See [Requirements](#requirements).
 - **A stopped zone shows a warning in the panel**: the stop command failed, so the valve may still be open. Check the controller.
 - **A zone won't restart**: it reached the 2-hour limit and can't run again for up to 10 minutes unless it's stopped first.
 - **A zone shows "Waiting its turn"**: another zone on the same controller is running. Use **Skip zone** to move on, or **Stop all** to clear the queue.
