@@ -31,6 +31,8 @@ class QueuedRun:
     seconds: int
     # The program subentry that queued it, or None for a manual start
     program: str | None = None
+    # Set when the zone is stopped while it's being started, so it isn't opened
+    cancelled: bool = False
 
 
 class RunQueue:
@@ -58,6 +60,8 @@ class RunQueue:
         self.master_lead = master_lead
         self.waiting: deque[QueuedRun] = deque()
         self.current: QueuedRun | None = None
+        # The zone being started: in the gap before it, or waiting for the master valve
+        self.starting: QueuedRun | None = None
         self.current_ends = 0.0
         self._task: asyncio.Task | None = None
         self._advance = asyncio.Event()
@@ -91,8 +95,12 @@ class RunQueue:
     # -- commands ----------------------------------------------------------
 
     def runs(self):
-        """Return the running zone, if any, and every waiting one."""
-        return ([self.current] if self.current else []) + list(self.waiting)
+        """Return the running zone, if any, the one being started, and every waiting one."""
+        return (
+            ([self.current] if self.current else [])
+            + ([self.starting] if self.starting and not self.starting.cancelled else [])
+            + list(self.waiting)
+        )
 
     async def async_enqueue(self, zone: int, seconds: int, program: str | None = None) -> None:
         """Run `zone` for `seconds` now if idle, otherwise after the zones ahead of it."""
@@ -107,9 +115,12 @@ class RunQueue:
         async with self._lock:
             if self._task is not None:
                 if program is None:
-                    # Starting the zone that's already running does nothing, so
-                    # a repeated open_valve can't water it twice
-                    if self.current is not None and self.current.zone == zone:
+                    # Starting the zone that's already running, or being started,
+                    # does nothing, so a repeated open_valve can't water it twice
+                    if any(
+                        active is not None and active.zone == zone and not active.cancelled
+                        for active in (self.current, self.starting)
+                    ):
                         _LOGGER.info("Zone %s is already running", zone)
                         return
                     # A newer manual start for a waiting zone replaces the older one
@@ -126,8 +137,15 @@ class RunQueue:
             )
 
     def remove(self, zone: int, manual_only: bool = False) -> bool:
-        """Drop waiting runs of `zone`; return true if there were any."""
+        """Drop waiting runs of `zone`; return true if there were any.
+
+        Unless `manual_only`, a run of `zone` that's being started is called off too.
+        """
         before = len(self.waiting)
+        starting = self.starting
+        if not manual_only and starting is not None and starting.zone == zone and not starting.cancelled:
+            starting.cancelled = True
+            before += 1
         self.waiting = deque(
             run
             for run in self.waiting
@@ -181,9 +199,15 @@ class RunQueue:
                 run = None
                 while self.waiting and not self._stopping:
                     candidate = self.waiting.popleft()
-                    await asyncio.sleep(ZONE_GAP)
+                    self.starting = candidate
+                    try:
+                        await asyncio.sleep(ZONE_GAP)
+                    finally:
+                        self.starting = None
                     if self._stopping:
                         break
+                    if candidate.cancelled:
+                        continue
                     try:
                         await self._open(candidate)
                     except Exception as err:  # noqa: BLE001 - one bad zone mustn't strand the rest
@@ -201,12 +225,15 @@ class RunQueue:
     async def _open(self, run: QueuedRun) -> None:
         """Open the master valve, wait the lead time, then open the zone."""
         valve = self._valve(run.zone)
+        self.starting = run
         try:
             await self._master_on(run.seconds)
             if self.master_lead and (self.master_zone or self.master_switch):
                 await asyncio.sleep(self.master_lead)
             if self._stopping:
                 raise HomeAssistantError(f"Zone {run.zone} wasn't started: Stop all was pressed")
+            if run.cancelled:
+                raise HomeAssistantError(f"Zone {run.zone} wasn't started: it was stopped")
             try:
                 await valve.async_send_run(run.seconds)
             except Exception:
@@ -218,6 +245,8 @@ class RunQueue:
             # zone opened, nothing is left open without a zone to feed
             await self._master_off()
             raise
+        finally:
+            self.starting = None
         # Cleared here, not in the worker, so a Skip pressed before the worker runs still counts
         self._advance.clear()
         self.current = run
