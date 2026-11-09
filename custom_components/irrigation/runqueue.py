@@ -23,6 +23,10 @@ _LOGGER = logging.getLogger(__name__)
 ZONE_GAP = 1
 
 
+class StoppedError(HomeAssistantError):
+    """A start was refused because Stop all was pressed after it was asked for."""
+
+
 @dataclass
 class QueuedRun:
     """One zone waiting to run, or running."""
@@ -68,6 +72,11 @@ class RunQueue:
         # Held while deciding whether to start or queue, and while the first zone opens
         self._lock = asyncio.Lock()
         self._stopping = False
+        # Counts every Stop all, so a start asked for before one can tell it came
+        self._stops = 0
+        self._stops_running = 0
+        # Set once the controller is unloading, so nothing new can start
+        self._closed = False
         self._listeners: list[Callable[[], None]] = []
 
     # -- state for entities ------------------------------------------------
@@ -110,9 +119,16 @@ class RunQueue:
             )
         self._valve(zone)
         run = QueuedRun(zone, seconds, program)
+        stops = self._stops
         # One action on several zones calls this for each at the same time, so
         # the idle check and the first zone's start must happen as one step
         async with self._lock:
+            # A start that waited here while Stop all was pressed mustn't go
+            # ahead once Stop all lets go of the lock
+            if self._closed:
+                raise StoppedError(f"Zone {zone} wasn't started: the controller is unloading")
+            if self._stops != stops or self._stops_running:
+                raise StoppedError(f"Zone {zone} wasn't started: Stop all was pressed")
             if self._task is not None:
                 if program is None:
                     # Starting the zone that's already running, or being started,
@@ -163,6 +179,14 @@ class RunQueue:
 
     async def async_stop_all(self) -> None:
         """Clear the queue and close every zone and the master valve."""
+        self._stops += 1
+        self._stops_running += 1
+        try:
+            await self._async_stop_all()
+        finally:
+            self._stops_running -= 1
+
+    async def _async_stop_all(self) -> None:
         self._stopping = True
         self.waiting.clear()
         # Wait for a zone that's being started right now, so it gets stopped too
@@ -231,7 +255,7 @@ class RunQueue:
             if self.master_lead and (self.master_zone or self.master_switch):
                 await asyncio.sleep(self.master_lead)
             if self._stopping:
-                raise HomeAssistantError(f"Zone {run.zone} wasn't started: Stop all was pressed")
+                raise StoppedError(f"Zone {run.zone} wasn't started: Stop all was pressed")
             if run.cancelled:
                 raise HomeAssistantError(f"Zone {run.zone} wasn't started: it was stopped")
             try:
@@ -376,6 +400,7 @@ class RunQueue:
 
     async def async_shutdown(self) -> None:
         """Stop everything when the controller is unloaded."""
+        self._closed = True
         # A first zone that's being started holds the lock, with no task yet
         if self._task is not None or self.waiting or self._lock.locked():
             await self.async_stop_all()

@@ -470,3 +470,25 @@ async def test_unload_during_the_first_zones_master_lead_opens_nothing(hass, dae
         await start
     await asyncio.sleep(0.2)
     assert daemon.zones[1] == 0 and daemon.zones[4] == 0, daemon.sent()
+
+
+async def test_stop_all_while_several_zones_start_opens_nothing_more(hass, daemon):
+    """Stop all while one action starts several zones lets none of them open later."""
+    entry = await setup_with(hass, daemon, master_zone=4, master_lead=2)
+    queue = queue_of(hass, entry)
+    start = hass.async_create_task(
+        hass.services.async_call(
+            "irrigation", "run",
+            {"entity_id": [ZONE_1, ZONE_2, "valve.irrigation_zone_3"], "duration": 300},
+            blocking=True,
+        )
+    )
+    await asyncio.sleep(0.5)  # zone 1 waits out the master lead; 2 and 3 wait for the lock
+    async with asyncio.timeout(5):
+        await hass.services.async_call("irrigation", "stop_all", {}, blocking=True)
+    with pytest.raises(HomeAssistantError):
+        await start
+    await asyncio.sleep(3)
+    opened = [c for c in daemon.sent() if c.startswith(("ZONE=1 ", "ZONE=2 ", "ZONE=3 ")) and not c.endswith("TIME=0")]
+    assert opened == [], daemon.sent()
+    assert not queue.running

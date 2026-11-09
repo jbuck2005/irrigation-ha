@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Stop all now also stops zones that were starting together.** Pressed while one action, such as `irrigation.run` on several zones, was starting them, or while a program's first zone waited for the master valve, Stop all used to let the next of those zones open and run its full time, and could wait for that run to end. Now none of them starts, and a program stops at once
+
+## 1.3.2 - 2026-11-09
+
 - **Stopping a zone that's about to start keeps it closed.** Pressed in the pause before the zone opens, or while the master valve opens ahead of it, Stop used to let it open anyway and run its full time. Starting such a zone again no longer queues a second run, and the panel shows it as waiting
 - Removing, disabling or reloading a controller while its first zone waits for the master valve no longer leaves the master zone open for that zone's run time
 
