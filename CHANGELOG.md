@@ -8,6 +8,7 @@
 - **Stop all now stops a zone that's about to start.** Pressed in the pause between zones or during the master lead time, it used to let the next zone open and run its full time. It also no longer waits for that run, and `irrigation.stop_all` stops every controller at once
 - Starting a zone that's already running does nothing, instead of queueing a second full run
 - If a start's reply is lost, the zone and master zone are sent a stop, so nothing is left open without Home Assistant knowing
+- A busy `irrigationd` (too many connections open, or rate limiting) is no longer mistaken for one too old for TLS, so it never leads to the token being sent in plain text
 
 ## 1.3.0 - 2026-11-08
 

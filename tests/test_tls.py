@@ -13,6 +13,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.irrigation import status
 from custom_components.irrigation.const import CONF_TLS, DOMAIN
 from custom_components.irrigation.status import (
+    BusyError,
     NotTlsError,
     TlsRejectedError,
     psk_key,
@@ -113,6 +114,24 @@ def test_old_irrigationd_is_detected():
     # The handshake carries no token
     assert TOKEN.encode() not in server.received
     assert psk_key(TOKEN) not in server.received
+
+
+@pytest.mark.parametrize("reply", [b"ERR server busy\n", b"ERR rate limit exceeded\n"])
+def test_busy_irrigationd_is_not_mistaken_for_an_old_one(reply):
+    """irrigationd turning the connection away isn't a reason to drop TLS."""
+    server = TlsServer(TOKEN, plain_reply=reply)
+    with pytest.raises(BusyError):
+        run_tls(server, TOKEN)
+
+
+async def test_busy_irrigationd_never_gets_the_token_in_plain_text(hass, daemon):
+    """A busy reply on a controller that allows plain text doesn't fall back to it."""
+    entry = await setup(hass, daemon)
+    daemon.commands.clear()
+    with patch.object(status, "send_tls_command", side_effect=BusyError("busy")):
+        await poll(hass, entry)
+    assert not any("TOKEN=" in c for c in daemon.commands)
+    assert daemon.transports.count("plain") == 0
 
 
 def self_signed_cert(tmp_path):
