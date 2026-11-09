@@ -17,8 +17,9 @@ permissions:
 jobs:
   pytest:
     runs-on: ubuntu-latest
-    # Python 3.13 straight from the official image, so no setup action is needed
-    container: python:3.13-slim
+    # Python 3.13 straight from the official image, so no setup action is
+    # needed. Not the slim image: some test dependencies build with gcc.
+    container: python:3.13
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
