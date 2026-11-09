@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Stopping a zone that's about to start keeps it closed.** Pressed in the pause before the zone opens, or while the master valve opens ahead of it, Stop used to let it open anyway and run its full time. Starting such a zone again no longer queues a second run, and the panel shows it as waiting
+
 ## 1.3.1 - 2026-11-09
 
 - **Plain text is off for new controllers.** A new option, **Allow the token in plain text**, is needed before the token is ever sent unencrypted to an `irrigationd` too old for TLS. Existing controllers keep their current behaviour, and it can be changed under **Configure**

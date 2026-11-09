@@ -402,3 +402,59 @@ async def test_lost_start_reply_sends_a_stop(hass, daemon):
     with pytest.raises(HomeAssistantError):
         await hass.services.async_call("valve", "open_valve", {"entity_id": ZONE_1}, blocking=True)
     assert daemon.zones[1] == 0 and daemon.zones[4] == 0
+
+
+async def test_stopping_a_zone_about_to_start_keeps_it_closed(hass, daemon):
+    """Stop on the next zone, in the gap before it opens, calls its start off."""
+    entry = await setup_with(hass, daemon)
+    queue = queue_of(hass, entry)
+    with patch("custom_components.irrigation.runqueue.ZONE_GAP", 0.6):
+        await queue.async_enqueue(1, 1)
+        await queue.async_enqueue(2, 300)
+        await queue.async_enqueue(3, 300)
+        await asyncio.sleep(1.2)  # zone 1 has ended; zone 2 waits out the gap
+        assert hass.states.get(ZONE_2).attributes["queued"] is True
+        await hass.services.async_call("valve", "close_valve", {"entity_id": ZONE_2}, blocking=True)
+        await asyncio.sleep(1.5)
+    assert "ZONE=2 TIME=300" not in daemon.sent()
+    assert daemon.zones[2] == 0
+    assert queue.current is not None and queue.current.zone == 3
+
+
+async def test_stopping_a_zone_during_the_master_lead_keeps_it_closed(hass, daemon):
+    """Stop on a zone while the master valve opens ahead of it closes both."""
+    entry = await setup_with(hass, daemon, master_zone=4, master_lead=3)
+    queue = queue_of(hass, entry)
+    await queue.async_enqueue(1, 1)
+    await queue.async_enqueue(2, 300)
+    await asyncio.sleep(2)  # zone 1 has ended; zone 2's master lead is under way
+    await hass.services.async_call("valve", "close_valve", {"entity_id": ZONE_2}, blocking=True)
+    await asyncio.sleep(3)  # past the end of the lead
+    assert "ZONE=2 TIME=300" not in daemon.sent()
+    assert daemon.zones[2] == 0 and daemon.zones[4] == 0
+    assert not queue.running
+
+
+async def test_starting_a_zone_about_to_start_again_does_nothing(hass, daemon):
+    """A second start of the next zone, in the gap before it opens, adds no run."""
+    entry = await setup_with(hass, daemon)
+    queue = queue_of(hass, entry)
+    with patch("custom_components.irrigation.runqueue.ZONE_GAP", 0.6):
+        await queue.async_enqueue(1, 1)
+        await queue.async_enqueue(2, 2)
+        await asyncio.sleep(1.2)
+        await queue.async_enqueue(2, 2)
+        await asyncio.sleep(3.5)
+    assert daemon.sent().count("ZONE=2 TIME=2") == 1, daemon.sent()
+
+
+async def test_starting_a_zone_again_during_the_master_lead_does_nothing(hass, daemon):
+    """A second start of a zone waiting for the master valve adds no run."""
+    entry = await setup_with(hass, daemon, master_zone=4, master_lead=2)
+    queue = queue_of(hass, entry)
+    await queue.async_enqueue(1, 1)
+    await queue.async_enqueue(2, 2)
+    await asyncio.sleep(1.5)
+    await queue.async_enqueue(2, 2)
+    await asyncio.sleep(8)
+    assert daemon.sent().count("ZONE=2 TIME=2") == 1, daemon.sent()

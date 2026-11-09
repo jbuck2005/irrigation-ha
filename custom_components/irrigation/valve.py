@@ -109,7 +109,9 @@ class IrrigationZoneValve(ValveEntity):
             # The zone's default run time, and the length of the current or last run
             "configured_duration": self._default_duration,
             "run_duration": self._duration,
-            "queued": queue is not None and any(run.zone == self._zone for run in queue.waiting),
+            # Waiting, or about to start, so the panel offers Stop rather than Start
+            "queued": queue is not None
+            and any(run.zone == self._zone for run in queue.runs() if run is not queue.current),
             "master": queue is not None and queue.master_zone == self._zone,
         }
 
