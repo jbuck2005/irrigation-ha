@@ -1,7 +1,7 @@
 # 🚀 Pull Request
 
 ## Description
-Please include a summary of the changes and the related issue. 
+Please include a summary of the changes and the related issue.
 
 Fixes # (issue)
 

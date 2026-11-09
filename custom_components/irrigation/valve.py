@@ -157,7 +157,7 @@ class IrrigationZoneValve(ValveEntity):
         return self.hass.data[DOMAIN][self._entry_id]["queue"]
 
     async def async_open_valve(self, **kwargs):
-        """Run the zone for its default duration, after any zones already running."""
+        """Run the zone for its default run time, after any zones already running."""
         await self.async_run()
 
     async def async_run(self, duration=None):

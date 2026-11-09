@@ -165,8 +165,8 @@ class Scheduler:
             matched = [t for t in start_times(program) if t[0] * 60 + t[1] in due]
             if not matched or not runs_on(program, now.date()):
                 continue
-            # The hour repeated when clocks go back, or a clock stepped back,
-            # mustn't start the same scheduled run twice
+            # When clocks go back and an hour repeats, or a clock steps back,
+            # the same scheduled run mustn't start twice
             key = f"{now.date().isoformat()} {matched[-1][0]:02d}:{matched[-1][1]:02d}"
             if program.get("last_start_key") == key:
                 continue

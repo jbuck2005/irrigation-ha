@@ -10,12 +10,12 @@ assignees: jbuck2005
 A clear and concise description of what the bug is.
 
 **To Reproduce**
-Steps to reproduce the behavior:
+Steps to reproduce the behaviour:
 1. Go to '...'
 2. Click on '...'
 3. See error
 
-**Expected behavior**
+**Expected behaviour**
 A clear and concise description of what you expected to happen.
 
 **Screenshots / Logs**
@@ -25,7 +25,7 @@ If applicable, add screenshots or logs from Settings → System → Logs. Remove
 - Home Assistant version: 
 - Irrigation Controller integration version: 
 - irrigationd version: 
-- Environment (Docker, Supervisor, Core, etc):
+- Installation type (OS, Container, Supervised or Core):
 
 **Additional context**
 Add any other context about the problem here.
