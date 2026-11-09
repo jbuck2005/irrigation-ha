@@ -127,6 +127,8 @@ A program waters zones on a schedule, with no automation needed. On the controll
 
 At each start time, the program's zones run one at a time in zone order, through the same queue as any other run. The master zone is skipped, since it opens with every zone anyway. To change a program, open its **⋮** menu on the integration page and select **Reconfigure**. Changing "every few days" restarts the count from that day.
 
+When clocks go back and an hour repeats, a start time in it runs once. When clocks go forward, a start time in the skipped hour runs at the end of the gap.
+
 Each program is its own device, with a schedule switch, a **Run now** button and next and last run sensors. See [Programs](#programs-1) under Entities.
 
 If Home Assistant restarts while a program is running, its remaining zones are skipped, and a notification says so.
@@ -143,9 +145,9 @@ After setup, **Irrigation** appears in the sidebar, with nothing else to install
 
 - Start or stop a zone, and see the time left
 - Change a zone's default run time, from 10 seconds to 2 hours
-- Stop everything with **Stop all**, which shows while a zone is running or waiting, and also clears the queue
+- Stop everything with **Stop all**, which shows while a zone is running or waiting. It clears the queue, and also stops a zone that's about to start, even in the pause between zones or while the master valve opens
 
-Only one zone per controller runs at a time. Starting another zone shows it as **Waiting its turn**, and it starts when the zones ahead of it finish. Its button changes to **Cancel**. A master valve zone shows as **Master valve** and has no Start button, because it opens with the other zones.
+Only one zone per controller runs at a time. Starting another zone shows it as **Waiting its turn**, and it starts when the zones ahead of it finish. Its button changes to **Cancel**. Starting a zone that's already running does nothing. A master valve zone shows as **Master valve** and has no Start button, because it opens with the other zones.
 
 If a command fails, the zone shows a warning with the reason. A warning on a stopped zone means it may still be running, so check the controller.
 
@@ -192,7 +194,7 @@ Each program `<name>` has:
 
 ### Actions
 - `valve.open_valve` runs a zone for its default run time
-- `irrigation.run` runs one or more zones, with an optional `duration` from 10 to 7200 seconds. Zones beyond the first wait in the queue
+- `irrigation.run` runs one or more zones, with an optional `duration` from 10 to 7200 seconds. Zones beyond the first wait in the queue, and a zone that's already running is left as it is
 - `valve.close_valve` stops a running zone, which starts the next one, or cancels a waiting one
 - `irrigation.stop_all` clears every controller's queue and closes all zones and master valves
 - `irrigation.run_program` targets a program's switch and runs the program now, even with its schedule off. It's refused if the program is already running
@@ -334,7 +336,7 @@ Logs are under **Settings → System → Logs**. The token is never written to t
 - A token shorter than 16 characters could be guessed offline from one recorded connection. A short token you already have keeps working, with a Repairs notice until you [change it](#changing-the-token).
 - Either way, keep `irrigationd` reachable only from your local network, never from the internet. To let only Home Assistant connect, run `sudo systemctl edit irrigationd` on the irrigationd host, add `IPAddressDeny=any` and `IPAddressAllow=localhost <Home Assistant address>` under `[Service]`, and restart it.
 - Home Assistant stores the token in its configuration, like other integrations' credentials. The token field is hidden in the UI and never sent back to the browser.
-- `irrigationd` limits failed token attempts, closes each connection after 5 seconds, and allows at most 16 connections at once and 4 from one address. Set `IRRIGATIOND_TRUSTED_ADDR` on the irrigationd host to Home Assistant's address, so it keeps a slot and isn't locked out by bad attempts or a device holding connections open.
+- `irrigationd` limits failed token attempts, closes each connection after 5 seconds, and allows at most 16 connections at once and 4 from one address. The last 4 slots are kept for addresses that used the token in the last 15 minutes, such as Home Assistant, so devices without the token can't shut it out. Also set `IRRIGATIOND_TRUSTED_ADDR` on the irrigationd host to Home Assistant's address, so failed attempts from elsewhere never block it, even right after `irrigationd` restarts.
 
 To report a security problem, see the [security policy](SECURITY.md).
 
