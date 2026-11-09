@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Irrigation Controller is now in the default HACS list: install it by searching the Marketplace or HACS, with no custom repository needed
 - **Stopping a zone just as it starts keeps it closed.** A Stop sent while the zone's start was on its way to irrigationd could get there first, so the zone then opened and ran its full time while Home Assistant showed it closed. The zone is now closed again once its start is answered
 - A zone started the moment the queue finished its last zone no longer loses its master valve: the queue's final, repeated master stop could reach irrigationd after the new zone's master start
 - The master switch fail-safe no longer turns the pump off while the first zone starts. A switch whose state was unknown at startup, such as an optimistic MQTT or template switch, got its first state from the queue turning it on, and the fail-safe then turned it off again
