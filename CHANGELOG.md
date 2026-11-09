@@ -9,6 +9,7 @@
 - Starting a zone that's already running does nothing, instead of queueing a second full run
 - If a start's reply is lost, the zone and master zone are sent a stop, so nothing is left open without Home Assistant knowing
 - A busy `irrigationd` (too many connections open, or rate limiting) is no longer mistaken for one too old for TLS, so it never leads to the token being sent in plain text
+- A program's start time runs once even when clocks go back and the hour repeats, and a start time in the hour skipped when clocks go forward now runs at the end of that gap instead of not at all
 
 ## 1.3.0 - 2026-11-08
 

@@ -65,6 +65,20 @@ def start_times(program: dict) -> list[tuple[int, int]]:
     return sorted(times)
 
 
+def due_minutes(now: datetime) -> set[int]:
+    """Return the minutes of the day, as hour * 60 + minute, that start at `now`.
+
+    Normally just now's. When clocks go forward, the skipped times are due at
+    the first minute after the gap, so a start inside it still runs that day.
+    """
+    current = now.hour * 60 + now.minute
+    before = dt_util.as_local(dt_util.as_utc(now) - timedelta(minutes=1))
+    previous = before.hour * 60 + before.minute
+    if before.date() == now.date() and previous < current - 1:
+        return set(range(previous + 1, current + 1))
+    return {current}
+
+
 def next_run(program: dict, after: datetime) -> datetime | None:
     """Return the first start strictly after `after`, in its time zone, or None."""
     times = start_times(program)
@@ -141,12 +155,20 @@ class Scheduler:
 
     async def _async_tick(self, now: datetime) -> None:
         now = dt_util.as_local(now).replace(second=0, microsecond=0)
+        due = due_minutes(now)
         for sub in self.programs():
             program = sub.data
             if not program.get("enabled", True):
                 continue
-            if (now.hour, now.minute) not in start_times(program) or not runs_on(program, now.date()):
+            matched = [t for t in start_times(program) if t[0] * 60 + t[1] in due]
+            if not matched or not runs_on(program, now.date()):
                 continue
+            # The hour repeated when clocks go back, or a clock stepped back,
+            # mustn't start the same scheduled run twice
+            key = f"{now.date().isoformat()} {matched[-1][0]:02d}:{matched[-1][1]:02d}"
+            if program.get("last_start_key") == key:
+                continue
+            self._update(sub, last_start_key=key)
             if self.is_running(sub.subentry_id):
                 _LOGGER.warning("Not starting %s: it's still running from its last start", sub.title)
                 continue
