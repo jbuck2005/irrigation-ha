@@ -48,6 +48,19 @@ class TlsRejectedError(OSError):
     """irrigationd refused the TLS handshake, most likely because the token is wrong."""
 
 
+class BusyError(OSError):
+    """irrigationd turned the connection away before TLS: too many open, or rate limited."""
+
+
+def _rest_of_plain_reply(sock) -> bytes:
+    """Read what's left of a plain text line after TLS took its first bytes."""
+    try:
+        sock.settimeout(0.3)
+        return socket.socket.recv(sock, 64)
+    except OSError:
+        return b""
+
+
 TOKEN_FIELD = re.compile(r"TOKEN=\S*")
 CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
 
@@ -86,26 +99,35 @@ def _tls_context(token: str) -> ssl.SSLContext:
 def send_tls_command(host: str, port: int, token: str, command: str) -> str:
     """Send a command over TLS keyed by the token, and return the response line.
 
-    Raises NotTlsError if irrigationd answers without TLS, TlsRejectedError if
-    it refuses the handshake, and OSError like send_command otherwise.
+    Raises NotTlsError if irrigationd answers without TLS, BusyError if it turns
+    the connection away, TlsRejectedError if it refuses the handshake, and
+    OSError like send_command otherwise.
     """
     deadline = time.monotonic() + COMMAND_DEADLINE
     ctx = _tls_context(token)
     with socket.create_connection((host, port), timeout=5) as raw:
         raw.settimeout(max(0.1, min(5, deadline - time.monotonic())))
-        try:
-            sock = ctx.wrap_socket(raw)
-        except ssl.SSLError as err:
-            # An old irrigationd answers the handshake with a plain text line
-            if err.reason == "WRONG_VERSION_NUMBER":
-                raise NotTlsError("irrigationd doesn't support TLS yet") from None
-            if isinstance(err, ssl.SSLCertVerificationError):
-                raise TlsRejectedError(
-                    "The server offered a certificate instead of using the token, "
-                    "so it may not be irrigationd"
-                ) from None
-            raise TlsRejectedError("irrigationd refused the TLS handshake. Check the token") from None
-        with sock:
+        with ctx.wrap_socket(raw, do_handshake_on_connect=False) as sock:
+            try:
+                sock.do_handshake()
+            except ssl.SSLError as err:
+                # A plain text line instead of a handshake. A busy irrigationd
+                # sends one before reading anything; otherwise it's too old for
+                # TLS. The token is never sent either way, and falling back to
+                # plain text is only for the old one, so "busy" mustn't look like it.
+                if err.reason == "WRONG_VERSION_NUMBER":
+                    rest = _rest_of_plain_reply(sock)
+                    if b"busy" in rest:
+                        raise BusyError("irrigationd is busy: too many connections are open") from None
+                    if b"limit exceeded" in rest:
+                        raise BusyError("irrigationd refused the connection: rate limit exceeded") from None
+                    raise NotTlsError("irrigationd doesn't support TLS yet") from None
+                if isinstance(err, ssl.SSLCertVerificationError):
+                    raise TlsRejectedError(
+                        "The server offered a certificate instead of using the token, "
+                        "so it may not be irrigationd"
+                    ) from None
+                raise TlsRejectedError("irrigationd refused the TLS handshake. Check the token") from None
             if sock.version() != "TLSv1.3":
                 raise TlsRejectedError("irrigationd didn't use TLS 1.3")
             return _exchange(sock, command, deadline)
