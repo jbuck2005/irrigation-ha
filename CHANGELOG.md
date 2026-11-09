@@ -9,7 +9,6 @@
 - Starting a zone that's already running does nothing, instead of queueing a second full run
 - If a start's reply is lost, the zone and master zone are sent a stop, so nothing is left open without Home Assistant knowing
 
-
 ## 1.3.0 - 2026-11-08
 
 ### Before you update
