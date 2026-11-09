@@ -6,6 +6,12 @@
 - A newly entered token must be at least 16 characters. A shorter token that is already stored keeps working, and Repairs shows a notice suggesting a new one
 - If the master switch fails to turn on after a master zone opened, the master zone is closed again, and an unexpected error starting a queued zone skips only that zone
 
+### irrigationd (companion daemon, update it on the controller)
+
+- Slow or idle connections can no longer lock Home Assistant out. Each connection gets 5 seconds to finish, one address can hold at most 4 connections, and one slot is always kept for the trusted address
+- `irrigationctl` refuses a server that offers a certificate instead of the token's key, so it can't be fooled by an impostor. It also warns when the token is given on the command line; set `IRRIGATION_TOKEN` instead
+- The systemd service is more tightly sandboxed: a read-only system, no capabilities, only the I2C device, and a limited set of system calls
+
 ## 1.3.0 - 2026-11-08
 
 ### Before you update
