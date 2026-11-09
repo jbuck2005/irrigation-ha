@@ -1,0 +1,35 @@
+name: Tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+  # Weekly, with many more random run-queue seeds than a pull request runs
+  schedule:
+    - cron: "0 7 * * 1"
+
+# The tests only read the repo.
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    # Python 3.13 straight from the official image, so no setup action is
+    # needed. Not the slim image: some test dependencies build with gcc.
+    container: python:3.13
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install the test tools
+        run: pip install --no-cache-dir -r requirements_test.txt
+
+      - name: Run the tests
+        env:
+          IRRIGATION_RANDOM_RUNS: ${{ github.event_name == 'schedule' && '400' || '40' }}
+        run: pytest -q

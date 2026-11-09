@@ -18,6 +18,7 @@ Problems with the daemon itself belong in [irrigationd](https://github.com/jbuck
 2. Keep each pull request to one change.
 3. Run `python -m py_compile custom_components/irrigation/*.py` before committing.
    Run the test suite too with `pytest`; see [`tests/README.md`](tests/README.md) for setup.
+   The **Tests** workflow runs it on every pull request, and a pull request isn't merged until it passes.
 4. Test with a running Home Assistant. A Docker install pointed at a simulated `irrigationd` is fine. Say in the pull request how you tested, and whether it ran on real valves.
 5. Update the README if behaviour changes, and add a line to [`CHANGELOG.md`](CHANGELOG.md).
 6. Open a pull request and fill in the template.
@@ -27,6 +28,8 @@ Problems with the daemon itself belong in [irrigationd](https://github.com/jbuck
 - An update must never clear a token that's already stored.
 - Nothing home-specific goes in the repo: no addresses, host names, paths, names or real tokens. Use `your-long-random-token` in examples.
 - Strip metadata from images before committing them.
+- Every bug fix adds a test that fails on the code before the fix and passes after it. Say in the pull request that you checked both. Never delete or loosen an existing test to make a change pass.
+- A change to the run queue (starting, stopping, the master valve) also runs the randomized tests with more seeds before it's merged: `IRRIGATION_RANDOM_RUNS=400 pytest tests/test_runqueue_random.py`.
 - Stage files by name rather than with `git add -A`.
 
 ## Making a release

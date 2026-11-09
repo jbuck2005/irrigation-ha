@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections import deque
+from collections import Counter, deque
 from collections.abc import Callable
 from dataclasses import dataclass
 import logging
@@ -27,6 +27,10 @@ class StoppedError(HomeAssistantError):
     """A start was refused because Stop all was pressed after it was asked for."""
 
 
+class ZoneStoppedError(HomeAssistantError):
+    """A start was refused because its zone was stopped after it was asked for."""
+
+
 @dataclass
 class QueuedRun:
     """One zone waiting to run, or running."""
@@ -35,8 +39,10 @@ class QueuedRun:
     seconds: int
     # The program subentry that queued it, or None for a manual start
     program: str | None = None
-    # Set when the zone is stopped while it's being started, so it isn't opened
-    cancelled: bool = False
+    # How many Stop alls, and Stops of this zone, there had been when it was
+    # asked for. A Stop after that calls it off; see RunQueue._refusal.
+    stops: int = 0
+    zone_stops: int = 0
 
 
 class RunQueue:
@@ -71,10 +77,13 @@ class RunQueue:
         self._advance = asyncio.Event()
         # Held while deciding whether to start or queue, and while the first zone opens
         self._lock = asyncio.Lock()
-        self._stopping = False
-        # Counts every Stop all, so a start asked for before one can tell it came
+        # Every Stop all, and every Stop of each zone, is counted. A run notes
+        # the counts when it's asked for, and _refusal compares them before
+        # each step that could open a valve, so a Stop always wins over a
+        # start asked for before it, wherever the start has got to.
         self._stops = 0
         self._stops_running = 0
+        self._zone_stops: Counter[int] = Counter()
         # Set once the controller is unloading, so nothing new can start
         self._closed = False
         self._listeners: list[Callable[[], None]] = []
@@ -107,7 +116,7 @@ class RunQueue:
         """Return the running zone, if any, the one being started, and every waiting one."""
         return (
             ([self.current] if self.current else [])
-            + ([self.starting] if self.starting and not self.starting.cancelled else [])
+            + ([self.starting] if self.starting and self._refusal(self.starting) is None else [])
             + list(self.waiting)
         )
 
@@ -118,23 +127,19 @@ class RunQueue:
                 f"Zone {zone} is the master valve, so it opens with the other zones"
             )
         self._valve(zone)
-        run = QueuedRun(zone, seconds, program)
-        stops = self._stops
+        run = QueuedRun(zone, seconds, program, self._stops, self._zone_stops[zone])
         # One action on several zones calls this for each at the same time, so
         # the idle check and the first zone's start must happen as one step
         async with self._lock:
-            # A start that waited here while Stop all was pressed mustn't go
-            # ahead once Stop all lets go of the lock
-            if self._closed:
-                raise StoppedError(f"Zone {zone} wasn't started: the controller is unloading")
-            if self._stops != stops or self._stops_running:
-                raise StoppedError(f"Zone {zone} wasn't started: Stop all was pressed")
+            # A start that waited here while Stop all, or a Stop of its zone,
+            # was pressed mustn't go ahead once it gets the lock
+            self._check(run)
             if self._task is not None:
                 if program is None:
                     # Starting the zone that's already running, or being started,
                     # does nothing, so a repeated open_valve can't water it twice
                     if any(
-                        active is not None and active.zone == zone and not active.cancelled
+                        active is not None and active.zone == zone and self._refusal(active) is None
                         for active in (self.current, self.starting)
                     ):
                         _LOGGER.info("Zone %s is already running", zone)
@@ -146,7 +151,6 @@ class RunQueue:
                 return
 
             # Idle: start it here, so a refusal fails the action that asked for it
-            self._stopping = False
             await self._open(run)
             self._task = self.hass.async_create_background_task(
                 self._worker(run), f"irrigation run queue {self._entry_id}"
@@ -155,13 +159,15 @@ class RunQueue:
     def remove(self, zone: int, manual_only: bool = False) -> bool:
         """Drop waiting runs of `zone`; return true if there were any.
 
-        Unless `manual_only`, a run of `zone` that's being started is called off too.
+        Unless `manual_only`, this is a Stop of the zone: every start of it asked
+        for until now is called off, wherever it has got to.
         """
         before = len(self.waiting)
-        starting = self.starting
-        if not manual_only and starting is not None and starting.zone == zone and not starting.cancelled:
-            starting.cancelled = True
-            before += 1
+        if not manual_only:
+            starting = self.starting
+            if starting is not None and starting.zone == zone and self._refusal(starting) is None:
+                before += 1
+            self._zone_stops[zone] += 1
         self.waiting = deque(
             run
             for run in self.waiting
@@ -187,7 +193,6 @@ class RunQueue:
             self._stops_running -= 1
 
     async def _async_stop_all(self) -> None:
-        self._stopping = True
         self.waiting.clear()
         # Wait for a zone that's being started right now, so it gets stopped too
         async with self._lock:
@@ -212,8 +217,8 @@ class RunQueue:
         finished = False
         try:
             while run is not None:
-                # Stop all may have come while this zone was opening
-                if not self._stopping:
+                # A Stop may have come while this zone was opening
+                if self._refusal(run) is None:
                     try:
                         await asyncio.wait_for(
                             self._advance.wait(), max(0, self.current_ends - time.monotonic())
@@ -222,16 +227,14 @@ class RunQueue:
                         pass
                 await self._close(run)
                 run = None
-                while self.waiting and not self._stopping:
+                while self.waiting:
                     candidate = self.waiting.popleft()
                     self.starting = candidate
                     try:
                         await asyncio.sleep(ZONE_GAP)
                     finally:
                         self.starting = None
-                    if self._stopping:
-                        break
-                    if candidate.cancelled:
+                    if self._refusal(candidate) is not None:
                         continue
                     try:
                         await self._open(candidate)
@@ -258,24 +261,22 @@ class RunQueue:
         valve = self._valve(run.zone)
         self.starting = run
         try:
+            self._check(run)
             await self._master_on(run.seconds)
             if self.master_lead and (self.master_zone or self.master_switch):
                 await asyncio.sleep(self.master_lead)
-            if self._stopping:
-                raise StoppedError(f"Zone {run.zone} wasn't started: Stop all was pressed")
-            if run.cancelled:
-                raise HomeAssistantError(f"Zone {run.zone} wasn't started: it was stopped")
+            self._check(run)
             try:
                 await valve.async_send_run(run.seconds)
             except Exception:
                 # The reply may have been lost after irrigationd opened it
                 await self._quietly(valve.async_send_stop())
                 raise
-            if run.cancelled:
+            if self._refusal(run) is not None:
                 # Stopped while the start was on its way: the Stop may have
                 # reached irrigationd first, so close the zone again
                 await self._quietly(valve.async_send_stop())
-                raise HomeAssistantError(f"Zone {run.zone} wasn't started: it was stopped")
+                self._check(run)
         except Exception:
             # Whichever step failed, such as the master switch after the master
             # zone opened, nothing is left open without a zone to feed
@@ -288,6 +289,25 @@ class RunQueue:
         self.current = run
         self.current_ends = time.monotonic() + run.seconds
         self._changed()
+
+    def _refusal(self, run: QueuedRun) -> HomeAssistantError | None:
+        """Return why `run` mustn't open its zone now, or None if it may.
+
+        This is the one place that decides. Every step that could open a valve
+        asks it first, and asks again once irrigationd has answered a start.
+        """
+        if self._closed:
+            return StoppedError(f"Zone {run.zone} wasn't started: the controller is unloading")
+        if run.stops != self._stops or self._stops_running:
+            return StoppedError(f"Zone {run.zone} wasn't started: Stop all was pressed")
+        if run.zone_stops != self._zone_stops[run.zone]:
+            return ZoneStoppedError(f"Zone {run.zone} wasn't started: it was stopped")
+        return None
+
+    def _check(self, run: QueuedRun) -> None:
+        """Raise if `run` mustn't open its zone now."""
+        if (refused := self._refusal(run)) is not None:
+            raise refused
 
     async def _close(self, run: QueuedRun) -> None:
         """Close the zone that just ran and the master valve."""
