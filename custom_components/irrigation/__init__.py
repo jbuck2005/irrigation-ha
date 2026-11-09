@@ -11,6 +11,7 @@ Irrigation integration bootstrap.
 - Serves the sidebar panel and dashboard card from the `frontend` folder.
 """
 
+import asyncio
 from pathlib import Path
 
 from homeassistant.components import frontend, panel_custom
@@ -49,8 +50,10 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     async def stop_all(call: ServiceCall) -> None:
         """Clear every controller's queue and close all its zones."""
-        for data in list(hass.data[DOMAIN].values()):
-            await data["queue"].async_stop_all()
+        # All at once, so one slow controller doesn't hold up the others
+        await asyncio.gather(
+            *(data["queue"].async_stop_all() for data in list(hass.data[DOMAIN].values()))
+        )
 
     hass.services.async_register(DOMAIN, "stop_all", stop_all)
     return True

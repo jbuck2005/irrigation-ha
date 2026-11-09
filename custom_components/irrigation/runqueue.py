@@ -106,8 +106,13 @@ class RunQueue:
         # the idle check and the first zone's start must happen as one step
         async with self._lock:
             if self._task is not None:
-                # A newer manual start for a waiting zone replaces the older one
                 if program is None:
+                    # Starting the zone that's already running does nothing, so
+                    # a repeated open_valve can't water it twice
+                    if self.current is not None and self.current.zone == zone:
+                        _LOGGER.info("Zone %s is already running", zone)
+                        return
+                    # A newer manual start for a waiting zone replaces the older one
                     self.remove(zone, manual_only=True)
                 self.waiting.append(run)
                 self._changed()
@@ -149,6 +154,8 @@ class RunQueue:
         task = self._task
         if task is not None:
             await asyncio.shield(task)
+        # A start that arrived while stopping mustn't run later
+        self.waiting.clear()
         # Also close zones started outside the queue, such as from irrigationd's CLI
         for entity in self.hass.data[DOMAIN][self._entry_id]["entities"]:
             if not entity.is_closed:
@@ -162,17 +169,21 @@ class RunQueue:
         """Wait out the running zone, then start each waiting zone in turn."""
         try:
             while run is not None:
-                try:
-                    await asyncio.wait_for(
-                        self._advance.wait(), max(0, self.current_ends - time.monotonic())
-                    )
-                except TimeoutError:
-                    pass
+                # Stop all may have come while this zone was opening
+                if not self._stopping:
+                    try:
+                        await asyncio.wait_for(
+                            self._advance.wait(), max(0, self.current_ends - time.monotonic())
+                        )
+                    except TimeoutError:
+                        pass
                 await self._close(run)
                 run = None
                 while self.waiting and not self._stopping:
                     candidate = self.waiting.popleft()
                     await asyncio.sleep(ZONE_GAP)
+                    if self._stopping:
+                        break
                     try:
                         await self._open(candidate)
                     except Exception as err:  # noqa: BLE001 - one bad zone mustn't strand the rest
@@ -194,7 +205,14 @@ class RunQueue:
             await self._master_on(run.seconds)
             if self.master_lead and (self.master_zone or self.master_switch):
                 await asyncio.sleep(self.master_lead)
-            await valve.async_send_run(run.seconds)
+            if self._stopping:
+                raise HomeAssistantError(f"Zone {run.zone} wasn't started: Stop all was pressed")
+            try:
+                await valve.async_send_run(run.seconds)
+            except Exception:
+                # The reply may have been lost after irrigationd opened it
+                await self._quietly(valve.async_send_stop())
+                raise
         except Exception:
             # Whichever step failed, such as the master switch after the master
             # zone opened, nothing is left open without a zone to feed
@@ -231,7 +249,9 @@ class RunQueue:
                 valve = self._valve(self.master_zone)
             except HomeAssistantError:
                 valve = None
-            if valve is not None and not valve.is_closed:
+            # Sent even if it looks closed: a start whose reply was lost can
+            # leave it open without Home Assistant knowing, and a stop is safe to repeat
+            if valve is not None:
                 await self._quietly(valve.async_send_stop())
         if self.master_switch:
             await self._master_switch_off()

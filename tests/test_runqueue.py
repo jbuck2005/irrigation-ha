@@ -207,8 +207,9 @@ async def test_master_closes_if_the_zone_is_refused(hass, daemon):
     daemon.refuse = {1}
     with pytest.raises(HomeAssistantError):
         await hass.services.async_call("valve", "open_valve", {"entity_id": ZONE_1}, blocking=True)
-    # The refused start is sent, then the master closes again
-    assert daemon.sent() == ["ZONE=4 TIME=300", "ZONE=1 TIME=300", "ZONE=4 TIME=0"]
+    # The refused start is sent, then a stop in case only its reply was lost,
+    # then the master closes again
+    assert daemon.sent() == ["ZONE=4 TIME=300", "ZONE=1 TIME=300", "ZONE=1 TIME=0", "ZONE=4 TIME=0"]
 
 
 async def test_master_switch_follows_the_queue(hass, daemon):
@@ -347,3 +348,57 @@ async def test_unexpected_error_skips_only_that_zone(hass, loaded, daemon):
     zone_2.async_send_run = real_send_run
     assert queue.current is not None and queue.current.zone == 3
     assert not queue.waiting
+
+
+async def test_stop_all_between_zones_starts_nothing(hass, daemon):
+    """Stop all pressed in the gap between zones doesn't let the next one start."""
+    entry = await setup_with(hass, daemon)
+    queue = queue_of(hass, entry)
+    with patch("custom_components.irrigation.runqueue.ZONE_GAP", 0.6):
+        await queue.async_enqueue(1, 1)
+        await queue.async_enqueue(2, 300)
+        await asyncio.sleep(1.2)  # zone 1 has ended; the next waits out the gap
+        async with asyncio.timeout(3):
+            await hass.services.async_call("irrigation", "stop_all", {}, blocking=True)
+    assert "ZONE=2 TIME=300" not in daemon.sent()
+    assert daemon.zones[2] == 0
+    assert not queue.running
+
+
+async def test_stop_all_during_master_lead_starts_nothing(hass, daemon):
+    """Stop all during the master lead time closes the master and opens no zone."""
+    entry = await setup_with(hass, daemon, master_zone=4, master_lead=3)
+    queue = queue_of(hass, entry)
+    await queue.async_enqueue(1, 1)  # returns after the lead, once zone 1 is open
+    await queue.async_enqueue(2, 300)
+    await asyncio.sleep(2)  # zone 1 has ended; zone 2's master lead is under way
+    async with asyncio.timeout(3):
+        await hass.services.async_call("irrigation", "stop_all", {}, blocking=True)
+    assert "ZONE=2 TIME=300" not in daemon.sent()
+    assert daemon.zones[2] == 0 and daemon.zones[4] == 0
+    assert not queue.running
+
+
+async def test_starting_the_running_zone_again_does_nothing(hass, loaded, daemon):
+    """A second open_valve on the running zone doesn't queue another run."""
+    await open_zone(hass, ZONE_1)
+    await open_zone(hass, ZONE_1)
+    assert [(run.zone, run.seconds) for run in queue_of(hass, loaded).runs()] == [(1, 300)]
+    assert daemon.sent() == ["ZONE=1 TIME=300"]
+
+
+async def test_lost_start_reply_sends_a_stop(hass, daemon):
+    """If irrigationd opened the zone but the reply was lost, it's closed again."""
+    await setup_with(hass, daemon, master_zone=4)
+    real = daemon.handle
+
+    def lose_zone_1_reply(command, authenticated=False):
+        reply = real(command, authenticated)
+        if command.startswith("ZONE=1 TIME=300"):
+            raise TimeoutError("reply lost")
+        return reply
+
+    daemon.handle = lose_zone_1_reply
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call("valve", "open_valve", {"entity_id": ZONE_1}, blocking=True)
+    assert daemon.zones[1] == 0 and daemon.zones[4] == 0

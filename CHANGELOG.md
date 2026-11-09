@@ -5,6 +5,9 @@
 - **Plain text is off for new controllers.** A new option, **Allow the token in plain text**, is needed before the token is ever sent unencrypted to an `irrigationd` too old for TLS. Existing controllers keep their current behaviour, and it can be changed under **Configure**
 - A newly entered token must be at least 16 characters. A shorter token that is already stored keeps working, and Repairs shows a notice suggesting a new one
 - If the master switch fails to turn on after a master zone opened, the master zone is closed again, and an unexpected error starting a queued zone skips only that zone
+- **Stop all now stops a zone that's about to start.** Pressed in the pause between zones or during the master lead time, it used to let the next zone open and run its full time. It also no longer waits for that run, and `irrigation.stop_all` stops every controller at once
+- Starting a zone that's already running does nothing, instead of queueing a second full run
+- If a start's reply is lost, the zone and master zone are sent a stop, so nothing is left open without Home Assistant knowing
 
 ### irrigationd (companion daemon, update it on the controller)
 
